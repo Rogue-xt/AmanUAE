@@ -1,0 +1,73 @@
+Project: ZoneGard
+Date: 2026-06-16
+
+Summary of work so far:
+- Implemented an application context in `src/context/AppContext.tsx` that manages vehicle profiles, document records, and an active parking ticket.
+- Context exposes state and async API functions: addVehicle, deleteVehicle, addDocument, deleteDocument, startParkingSession, clearParkingSession.
+- Storage keys used for persistence (AsyncStorage): @zonegard_vehicles, @zonegard_documents, @zonegard_active_ticket
+- I previously created `src/context/ContextSummary.ts` that summarised the context shape and provided `getCurrentSettings()` helper, but those edits were reverted by the user. Confirm current repo state before re-adding.
+
+AppContext.tsx (high-level):
+- Types: `VehicleProfile`, `DocumentRecord`, `ActiveTicket`
+- State: `vehicles: VehicleProfile[]`, `documents: DocumentRecord[]`, `activeTicket: ActiveTicket | null`, `isLoading: boolean`
+- Persistence: hydration on mount reads vehicles, documents, and ticket from AsyncStorage; expired tickets are auto-removed.
+- Functions persist changes back to AsyncStorage after mutation.
+- Provides a `useApp()` hook that throws if used outside `AppProvider`.
+
+Project folder structure (root):
+- .claude/
+- .expo/
+- .git/
+- .gitignore
+- .vscode/
+- AGENTS.md
+- CLAUDE.md
+- app/
+  - (tabs)/
+    - _layout.tsx
+    - explore.tsx
+    - index.tsx
+    - two.tsx
+  - +html.tsx
+  - +not-found.tsx
+  - _layout.tsx
+  - modal.tsx
+- app.json
+- assets/
+  - fonts/
+  - images/
+- components/
+  - EditScreenInfo.tsx
+  - ExternalLink.tsx
+  - StyledText.tsx
+  - Themed.tsx
+  - __tests__/StyledText-test.js
+  - useClientOnlyValue.ts
+  - useClientOnlyValue.web.ts
+  - useColorScheme.ts
+  - useColorScheme.web.ts
+- constants/
+  - Colors.ts
+- expo-env.d.ts
+- node_modules/
+- package-lock.json
+- package.json
+- src/
+  - context/
+    - AppContext.tsx
+  - utils/
+- tsconfig.json
+
+Notes & next steps:
+- Confirm whether you want `ContextSummary.ts` restored. I can recreate it (it included `contextSchema` and `getCurrentSettings()` reading AsyncStorage).
+- I can also add a small debug screen to display `getCurrentSettings()` output at runtime.
+
+Files created/modified in this session:
+- Created: WORKING_SUMMARY.txt (this file)
+
+If you want, I can:
+- Recreate `src/context/ContextSummary.ts` (again)
+- Add a debug screen using the context
+- Commit these changes
+
+Tell me which next step you'd like.
