@@ -1,28 +1,37 @@
 import * as Linking from "expo-linking";
 import * as Location from "expo-location";
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Alert,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from "react-native";
+import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { useApp } from "../../src/context/AppContext";
-import { generateParkingSMS, identifyEmirateFromRegion } from "@/src/context/utils/parkingFormatter";
+import {
+  generateParkingSMS,
+  identifyEmirateFromRegion,
+} from "@/src/context/utils/parkingFormatter";
+import { Theme } from "@/constants/Theme";
+import { FadeInView } from "@/components/ui/FadeInView";
+import { PremiumVehicleCard } from "@/components/ui/PremiumVehicleCard";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import { ScreenContainer, ScreenHeader, SectionHeader } from "@/components/ui/ScreenLayout";
+import { formatEmirate } from "@/components/ui/utils";
+
+const DURATION_OPTIONS = [
+  { value: 1, label: "1h" },
+  { value: 2, label: "2h" },
+  { value: 3, label: "3h" },
+  { value: 4, label: "4h" },
+];
 
 export default function ParkingScreen() {
-const {
-  vehicles,
-  addVehicle,
-  deleteVehicle,
-  activeTicket,
-  clearParkingSession,
-  startParkingSession,
-} = useApp();
-  // Functional state hooks for user configurations
+  const { vehicles, activeTicket, startParkingSession } = useApp();
+
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
   const [zoneCode, setZoneCode] = useState<string>("");
   const [duration, setDuration] = useState<number>(1);
@@ -30,15 +39,45 @@ const {
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [detectedEmirate, setDetectedEmirate] = useState<string | null>(null);
 
-  // Find the details of the active selected vehicle profile
   const activeVehicle = vehicles.find((v) => v.id === selectedVehicleId);
 
-  // 3. Add this GPS scanning function inside your component handler block
+  const currentParkingLocation =
+    (detectedEmirate as ReturnType<typeof identifyEmirateFromRegion>) ||
+    activeVehicle?.emirate;
+
+  const smsPreview = useMemo(() => {
+    if (!activeVehicle || !currentParkingLocation) return null;
+
+    const needsZone = ["Dubai", "RasAlKhaimah", "UmmAlQuwain", "Fujairah"].includes(
+      activeVehicle.emirate,
+    );
+    if (needsZone && !zoneCode.trim()) return null;
+
+    try {
+      return generateParkingSMS({
+        plateEmirate: activeVehicle.emirate,
+        parkingEmirate: currentParkingLocation,
+        plateCode: activeVehicle.plateCode,
+        plateNumber: activeVehicle.plateNumber,
+        zoneCode: zoneCode,
+        durationInHours: duration,
+        isPremiumAbuDhabi: isPremiumAbuDhabi,
+      });
+    } catch {
+      return null;
+    }
+  }, [
+    activeVehicle,
+    currentParkingLocation,
+    zoneCode,
+    duration,
+    isPremiumAbuDhabi,
+  ]);
+
   const handleAutoDetectEmirate = async () => {
     setIsLocating(true);
     try {
-      // Request permission from the OS system layer
-      let { status } = await Location.requestForegroundPermissionsAsync();
+      const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         Alert.alert(
           "Permission Denied",
@@ -48,20 +87,17 @@ const {
         return;
       }
 
-      // Fetch precise hardware coordinates
-      let location = await Location.getCurrentPositionAsync({
+      const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
 
-      // Reverse geocode coordinates to extract text strings from local map sets
-      let reverseGeocode = await Location.reverseGeocodeAsync({
+      const reverseGeocode = await Location.reverseGeocodeAsync({
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
       });
 
       if (reverseGeocode.length > 0) {
         const place = reverseGeocode[0];
-        // Use our utility analyzer to match the region to an emirate
         const targetEmirate = identifyEmirateFromRegion(
           place.region || place.city,
         );
@@ -73,7 +109,6 @@ const {
             `Detected current zone position: ${targetEmirate}`,
           );
 
-          // Match the user's active vehicle selector automatically if they own a car registered to this emirate!
           const matchingCar = vehicles.find((v) => v.emirate === targetEmirate);
           if (matchingCar) {
             setSelectedVehicleId(matchingCar.id);
@@ -105,7 +140,6 @@ const {
       return;
     }
 
-    // Validation guard: The big 3 municipal networks require zone tracking strings
     const needsZone = [
       "Dubai",
       "RasAlKhaimah",
@@ -119,14 +153,15 @@ const {
       );
       return;
     }
-    // Force a baseline fallback location if the user hasn't pressed auto-detect yet
-    const currentParkingLocation =
-      (detectedEmirate as any) || activeVehicle.emirate;
+
+    const parkingLocation =
+      (detectedEmirate as ReturnType<typeof identifyEmirateFromRegion>) ||
+      activeVehicle.emirate;
+
     try {
-      // 1. Process inputs via our unified 7-emirate utility formula
       const { recipient, body } = generateParkingSMS({
-        plateEmirate: activeVehicle.emirate, // e.g., 'Sharjah' (from vault)
-        parkingEmirate: currentParkingLocation,
+        plateEmirate: activeVehicle.emirate,
+        parkingEmirate: parkingLocation,
         plateCode: activeVehicle.plateCode,
         plateNumber: activeVehicle.plateNumber,
         zoneCode: zoneCode,
@@ -134,32 +169,27 @@ const {
         isPremiumAbuDhabi: isPremiumAbuDhabi,
       });
 
-      // 2. Build the platform-specific deep link URL scheme query
-      // This routes the compiled data payloads directly into iOS or Android native messaging apps
       const smsUrl = `sms:${recipient}?body=${encodeURIComponent(body)}`;
-      const durationInMilliseconds = duration * 60 * 60 * 1000; // Translate user hours into system runtime ms
-      const expiryTime = Date.now() + durationInMilliseconds;
-     
-
       const canOpen = await Linking.canOpenURL(smsUrl);
-   if (canOpen) {
-     await Linking.openURL(smsUrl);
 
-     const durationInMilliseconds = duration * 60 * 60 * 1000;
-     const expiryTime = Date.now() + durationInMilliseconds;
+      if (canOpen) {
+        await Linking.openURL(smsUrl);
 
-     await startParkingSession({
-       vehicleLabel: activeVehicle.label,
-       plateDetails: `${activeVehicle.plateCode} ${activeVehicle.plateNumber}`,
-       parkingEmirate: currentParkingLocation,
-       expiryTimestamp: expiryTime,
-     });
-   } else {
-     Alert.alert(
-       "Device Direct Error",
-       `System failed to deploy communications channel to target: ${recipient}`,
-     );
-   }
+        const durationInMilliseconds = duration * 60 * 60 * 1000;
+        const expiryTime = Date.now() + durationInMilliseconds;
+
+        await startParkingSession({
+          vehicleLabel: activeVehicle.label,
+          plateDetails: `${activeVehicle.plateCode} ${activeVehicle.plateNumber}`,
+          parkingEmirate: parkingLocation,
+          expiryTimestamp: expiryTime,
+        });
+      } else {
+        Alert.alert(
+          "Device Direct Error",
+          `System failed to deploy communications channel to target: ${recipient}`,
+        );
+      }
     } catch (err) {
       console.error(err);
       Alert.alert(
@@ -169,338 +199,403 @@ const {
     }
   };
 
+  const needsZoneInput =
+    activeVehicle &&
+    !["Sharjah", "Ajman"].includes(activeVehicle.emirate);
+
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ paddingBottom: 50 }}
-    >
-      <Text style={styles.headerTitle}>Parking Guard</Text>
-      <TouchableOpacity
-        style={[
-          styles.locationBanner,
-          isLocating && styles.locationBannerProcessing,
-        ]}
-        onPress={handleAutoDetectEmirate}
-        disabled={isLocating}
+    <ScreenContainer>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.scrollContent}
       >
-        <Text style={styles.locationBannerText}>
-          {isLocating
-            ? "📡 Scanning UAE Satellites..."
-            : "📍 Auto-Detect Current Emirate"}
-        </Text>
-        {detectedEmirate && (
-          <Text style={styles.locationSubText}>
-            Active Mode: {detectedEmirate}
-          </Text>
-        )}
-      </TouchableOpacity>
+        <FadeInView delay={0}>
+          <ScreenHeader
+            kicker="Smart UAE Parking"
+            title="Parking Assistant"
+            subtitle="SMS parking across all seven emirates"
+          />
+        </FadeInView>
 
-      {/* 1. HORIZONTAL CAR SELECTOR SLIDER TRACK */}
-      <Text style={styles.sectionTitle}>1. Choose Active Vehicle Profile</Text>
-      {vehicles.length === 0 ? (
-        <View style={styles.warningBox}>
-          <Text style={styles.warningText}>
-            No vehicle records linked inside storage vault. Please visit the
-            main profile dashboard to save a vehicle card entry first.
-          </Text>
-        </View>
-      ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.carSliderContainer}
-        >
-          {vehicles.map((car) => {
-            const isSelected = car.id === selectedVehicleId;
-            return (
-              <TouchableOpacity
-                key={car.id}
-                style={[styles.carCard, isSelected && styles.carCardActive]}
-                onPress={() => {
-                  setSelectedVehicleId(car.id);
-                  // Auto reset contextual settings based on state selection indicators
-                  setIsPremiumAbuDhabi(false);
-                }}
-              >
-                <Text style={[styles.carLabel, isSelected && styles.textWhite]}>
-                  {car.label}
-                </Text>
-                <Text style={styles.carSubtext}>{car.emirate}</Text>
-                <Text
-                  style={[
-                    styles.carPlateDetails,
-                    isSelected && styles.textWhite,
-                  ]}
-                >
-                  {car.plateCode} • {car.plateNumber}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      )}
-
-      {/* 2. DYNAMIC ZONE CONFIGURATION LAYER FIELDS */}
-      {activeVehicle && (
-        <View style={styles.fadeConfigurationPanel}>
-          <Text style={styles.sectionTitle}>
-            2. Input Local Parking Context
-          </Text>
-
-          {/* Conditional Input UI: Sharjah and Ajman skip text-based zones entirely */}
-          {!["Sharjah", "Ajman"].includes(activeVehicle.emirate) ? (
-            <TextInput
-              style={styles.inputField}
-              placeholder="Zone Code (e.g. 332C or 101)"
-              placeholderTextColor="#777"
-              value={zoneCode}
-              onChangeText={setZoneCode}
-              autoCapitalize="characters"
+        <FadeInView delay={80}>
+          <View style={[styles.scanCard, isLocating && styles.scanCardActive]}>
+            <View style={styles.scanIconWrap}>
+              <FontAwesome6
+                name="location-crosshairs"
+                size={22}
+                color={isLocating ? Theme.colors.primaryGlow : Theme.colors.primary}
+              />
+              {isLocating && <View style={styles.scanPulse} />}
+            </View>
+            <View style={styles.scanText}>
+              <Text style={styles.scanTitle}>
+                {isLocating ? "Scanning UAE Grid..." : "Emirate Detection"}
+              </Text>
+              <Text style={styles.scanSub}>
+                {detectedEmirate
+                  ? `Locked: ${formatEmirate(detectedEmirate)}`
+                  : "Use GPS to auto-detect your parking emirate"}
+              </Text>
+            </View>
+            <PrimaryButton
+              label={isLocating ? "..." : "Scan"}
+              onPress={handleAutoDetectEmirate}
+              disabled={isLocating}
+              variant="ghost"
+              style={styles.scanButton}
             />
-          ) : (
-            <View style={styles.infoNotification}>
-              <Text style={styles.infoText}>
-                💡 {activeVehicle.emirate} uses generalized flat rate messaging.
-                A zone code is not needed.
-              </Text>
-            </View>
-          )}
-
-          {/* Conditional Input UI: Abu Dhabi native standard vs premium flag controller */}
-          {activeVehicle.emirate === "AbuDhabi" && (
-            <View style={styles.rowLayoutToggle}>
-              <Text style={styles.toggleLabel}>
-                Premium Curb Zone (White & Turquoise)?
-              </Text>
-              <TouchableOpacity
-                style={[
-                  styles.toggleCheckbox,
-                  isPremiumAbuDhabi && styles.toggleCheckboxActive,
-                ]}
-                onPress={() => setIsPremiumAbuDhabi(!isPremiumAbuDhabi)}
-              >
-                <Text style={styles.checkboxText}>
-                  {isPremiumAbuDhabi ? "YES" : "NO"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* 3. HOURLY DURATION SELECTION DOCK */}
-          <Text style={styles.sectionSubTitle}>Ticket Duration (Hours)</Text>
-          <View style={styles.durationSelectorRow}>
-            {[1, 2, 3, 4].map((hr) => (
-              <TouchableOpacity
-                key={hr}
-                style={[
-                  styles.durationChip,
-                  duration === hr && styles.durationChipActive,
-                ]}
-                onPress={() => setDuration(hr)}
-              >
-                <Text
-                  style={[
-                    styles.durationText,
-                    duration === hr && styles.textWhite,
-                  ]}
-                >
-                  {hr}h
-                </Text>
-              </TouchableOpacity>
-            ))}
           </View>
+        </FadeInView>
 
-          {/* 4. MAIN ACTION BUTTON TRIGGER DISPATCHER */}
-          <TouchableOpacity
-            style={styles.launchButton}
-            onPress={handleTriggerSMS}
-          >
-            <Text style={styles.launchButtonText}>
-              Generate & Send SMS Ticket
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </ScrollView>
+        <FadeInView delay={160}>
+          <SectionHeader
+            title="Select Vehicle"
+            subtitle="Choose your active profile"
+          />
+          {vehicles.length === 0 ? (
+            <View style={styles.warningCard}>
+              <FontAwesome6
+                name="circle-exclamation"
+                size={20}
+                color={Theme.colors.warning}
+              />
+              <Text style={styles.warningText}>
+                No vehicles in vault. Register one on the Dashboard first.
+              </Text>
+            </View>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.vehicleSlider}
+            >
+              {vehicles.map((car) => (
+                <PremiumVehicleCard
+                  key={car.id}
+                  label={car.label}
+                  emirate={car.emirate}
+                  plateCode={car.plateCode}
+                  plateNumber={car.plateNumber}
+                  compact
+                  selected={car.id === selectedVehicleId}
+                  onPress={() => {
+                    setSelectedVehicleId(car.id);
+                    setIsPremiumAbuDhabi(false);
+                  }}
+                />
+              ))}
+            </ScrollView>
+          )}
+        </FadeInView>
+
+        {activeVehicle && (
+          <>
+            <FadeInView delay={240}>
+              <View style={styles.zoneCard}>
+                <SectionHeader
+                  title="Parking Zone"
+                  subtitle={
+                    needsZoneInput
+                      ? "Required for this emirate"
+                      : "Zone not required"
+                  }
+                />
+                {needsZoneInput ? (
+                  <TextInput
+                    style={styles.zoneInput}
+                    placeholder="Zone code (e.g. 332C or 101)"
+                    placeholderTextColor={Theme.colors.textMuted}
+                    value={zoneCode}
+                    onChangeText={setZoneCode}
+                    autoCapitalize="characters"
+                  />
+                ) : (
+                  <View style={styles.infoBox}>
+                    <FontAwesome6
+                      name="circle-info"
+                      size={14}
+                      color={Theme.colors.primaryGlow}
+                    />
+                    <Text style={styles.infoText}>
+                      {activeVehicle.emirate} uses flat-rate messaging. No zone
+                      code needed.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </FadeInView>
+
+            {activeVehicle.emirate === "AbuDhabi" && (
+              <FadeInView delay={300}>
+                <View style={styles.premiumToggle}>
+                  <View>
+                    <Text style={styles.premiumLabel}>Premium Curb Zone</Text>
+                    <Text style={styles.premiumSub}>
+                      White & Turquoise parking
+                    </Text>
+                  </View>
+                  <PrimaryButton
+                    label={isPremiumAbuDhabi ? "ON" : "OFF"}
+                    onPress={() => setIsPremiumAbuDhabi(!isPremiumAbuDhabi)}
+                    variant={isPremiumAbuDhabi ? "primary" : "ghost"}
+                    style={styles.toggleBtn}
+                  />
+                </View>
+              </FadeInView>
+            )}
+
+            <FadeInView delay={360}>
+              <View style={styles.durationCard}>
+                <SectionHeader title="Duration" subtitle="Ticket length in hours" />
+                <View style={styles.durationRow}>
+                  {DURATION_OPTIONS.map((opt) => (
+                    <PrimaryButton
+                      key={opt.value}
+                      label={opt.label}
+                      onPress={() => setDuration(opt.value)}
+                      variant={duration === opt.value ? "primary" : "ghost"}
+                      style={styles.durationBtn}
+                    />
+                  ))}
+                </View>
+              </View>
+            </FadeInView>
+
+            {smsPreview && (
+              <FadeInView delay={420}>
+                <View style={styles.previewCard}>
+                  <SectionHeader title="SMS Preview" subtitle="Ready to send" />
+                  <View style={styles.previewRow}>
+                    <Text style={styles.previewLabel}>To</Text>
+                    <Text style={styles.previewValue}>{smsPreview.recipient}</Text>
+                  </View>
+                  <View style={styles.previewBody}>
+                    <Text style={styles.previewBodyText}>{smsPreview.body}</Text>
+                  </View>
+                </View>
+              </FadeInView>
+            )}
+
+            <FadeInView delay={480}>
+              <PrimaryButton
+                label="Generate & Send SMS Ticket"
+                onPress={handleTriggerSMS}
+                icon={
+                  <FontAwesome6
+                    name="paper-plane"
+                    size={14}
+                    color={Theme.colors.textPrimary}
+                  />
+                }
+              />
+              {activeTicket && (
+                <Text style={styles.activeNote}>
+                  Active session running — sending will start a new timer.
+                </Text>
+              )}
+            </FadeInView>
+          </>
+        )}
+      </ScrollView>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0A0A0A",
-    paddingTop: 60,
-    paddingHorizontal: 20,
+  scrollContent: {
+    paddingHorizontal: Theme.spacing.xl,
+    paddingBottom: 120,
   },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#FFF",
-    marginBottom: 25,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#8E8E93",
-    marginBottom: 12,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  sectionSubTitle: {
-    color: "#8E8E93",
-    fontSize: 13,
-    marginBottom: 10,
-    marginTop: 5,
-  },
-  warningBox: {
-    backgroundColor: "#1C1C1E",
-    borderRadius: 8,
-    padding: 15,
-    borderLeftWidth: 3,
-    borderLeftColor: "#FFD60A",
-  },
-  warningText: {
-    color: "#AEAEB2",
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  carSliderContainer: {
+  scanCard: {
     flexDirection: "row",
-    marginBottom: 25,
-  },
-  carCard: {
-    backgroundColor: "#1C1C1E",
-    borderRadius: 12,
-    padding: 16,
-    width: 150,
-    marginRight: 12,
+    alignItems: "center",
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.xl,
+    padding: Theme.spacing.lg,
     borderWidth: 1,
-    borderColor: "#222",
+    borderColor: Theme.colors.border,
+    marginBottom: Theme.spacing.xl,
+    gap: Theme.spacing.md,
   },
-  carCardActive: {
-    borderColor: "#0A84FF",
-    backgroundColor: "#152E4D",
+  scanCardActive: {
+    borderColor: Theme.colors.primary,
+    backgroundColor: Theme.colors.elevated,
+    ...Theme.shadow.glow,
   },
-  carLabel: {
-    color: "#AEAEB2",
-    fontSize: 15,
-    fontWeight: "bold",
+  scanIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Theme.colors.primaryMuted,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
   },
-  carSubtext: {
-    color: "#8E8E93",
+  scanPulse: {
+    position: "absolute",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: Theme.colors.primaryGlow,
+    opacity: 0.5,
+  },
+  scanText: {
+    flex: 1,
+  },
+  scanTitle: {
+    color: Theme.colors.textPrimary,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  scanSub: {
+    color: Theme.colors.textMuted,
     fontSize: 12,
     marginTop: 2,
-    marginBottom: 12,
   },
-  carPlateDetails: {
-    color: "#8E8E93",
-    fontSize: 14,
-    fontWeight: "600",
+  scanButton: {
+    paddingVertical: Theme.spacing.sm,
+    paddingHorizontal: Theme.spacing.lg,
   },
-  fadeConfigurationPanel: {
-    marginTop: 10,
+  warningCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Theme.spacing.md,
+    backgroundColor: Theme.colors.warningMuted,
+    borderRadius: Theme.radius.lg,
+    padding: Theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.warning,
+    marginBottom: Theme.spacing.lg,
   },
-  inputField: {
-    backgroundColor: "#1C1C1E",
-    color: "#FFF",
-    borderRadius: 8,
-    padding: 14,
-    fontSize: 16,
-    marginBottom: 20,
+  warningText: {
+    flex: 1,
+    color: Theme.colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
   },
-  infoNotification: {
-    backgroundColor: "#1C1C1E",
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 20,
+  vehicleSlider: {
+    paddingBottom: Theme.spacing.lg,
+  },
+  zoneCard: {
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.xl,
+    padding: Theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.primary,
+    marginBottom: Theme.spacing.lg,
+    ...Theme.shadow.glow,
+  },
+  zoneInput: {
+    backgroundColor: Theme.colors.surface,
+    color: Theme.colors.textPrimary,
+    borderRadius: Theme.radius.md,
+    padding: Theme.spacing.lg,
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: 2,
+    textAlign: "center",
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  infoBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Theme.spacing.sm,
+    backgroundColor: Theme.colors.primaryMuted,
+    borderRadius: Theme.radius.md,
+    padding: Theme.spacing.md,
   },
   infoText: {
-    color: "#0A84FF",
-    fontSize: 14,
+    flex: 1,
+    color: Theme.colors.primaryGlow,
+    fontSize: 13,
+    lineHeight: 18,
   },
-  rowLayoutToggle: {
+  premiumToggle: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#1C1C1E",
-    padding: 14,
-    borderRadius: 8,
-    marginBottom: 20,
-  },
-  toggleLabel: {
-    color: "#FFF",
-    fontSize: 14,
-  },
-  toggleCheckbox: {
-    backgroundColor: "#3A3A3C",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-  },
-  toggleCheckboxActive: {
-    backgroundColor: "#FFD60A",
-  },
-  checkboxText: {
-    color: "#FFF",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  durationSelectorRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 30,
-  },
-  durationChip: {
-    backgroundColor: "#1C1C1E",
-    flex: 0.22,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  durationChipActive: {
-    backgroundColor: "#0A84FF",
-  },
-  durationText: {
-    color: "#8E8E93",
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  launchButton: {
-    backgroundColor: "#0A84FF",
-    borderRadius: 8,
-    padding: 16,
-    alignItems: "center",
-  },
-  launchButtonText: {
-    color: "#FFF",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  textWhite: {
-    color: "#FFF",
-  },
-  locationBanner: {
-    backgroundColor: "#1C1C1E",
-    borderRadius: 10,
-    padding: 15,
-    alignItems: "center",
-    marginBottom: 25,
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.lg,
+    padding: Theme.spacing.lg,
     borderWidth: 1,
-    borderColor: "#3A3A3C",
+    borderColor: Theme.colors.border,
+    marginBottom: Theme.spacing.lg,
   },
-  locationBannerProcessing: {
-    backgroundColor: "#152E4D",
-    borderColor: "#0A84FF",
+  premiumLabel: {
+    color: Theme.colors.textPrimary,
+    fontSize: 14,
+    fontWeight: "700",
   },
-  locationBannerText: {
-    color: "#0A84FF",
-    fontSize: 15,
-    fontWeight: "bold",
-  },
-  locationSubText: {
-    color: "#30D158",
+  premiumSub: {
+    color: Theme.colors.textMuted,
     fontSize: 12,
-    marginTop: 4,
+    marginTop: 2,
+  },
+  toggleBtn: {
+    paddingVertical: Theme.spacing.sm,
+    paddingHorizontal: Theme.spacing.lg,
+    minWidth: 64,
+  },
+  durationCard: {
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.xl,
+    padding: Theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    marginBottom: Theme.spacing.lg,
+  },
+  durationRow: {
+    flexDirection: "row",
+    gap: Theme.spacing.sm,
+  },
+  durationBtn: {
+    flex: 1,
+    paddingVertical: Theme.spacing.md,
+  },
+  previewCard: {
+    backgroundColor: Theme.colors.elevated,
+    borderRadius: Theme.radius.xl,
+    padding: Theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    marginBottom: Theme.spacing.lg,
+  },
+  previewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Theme.spacing.md,
+    marginBottom: Theme.spacing.sm,
+  },
+  previewLabel: {
+    ...Theme.typography.label,
+    color: Theme.colors.textMuted,
+  },
+  previewValue: {
+    color: Theme.colors.primaryGlow,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  previewBody: {
+    backgroundColor: Theme.colors.surface,
+    borderRadius: Theme.radius.md,
+    padding: Theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderSubtle,
+  },
+  previewBodyText: {
+    color: Theme.colors.textPrimary,
+    fontSize: 16,
     fontWeight: "600",
+    letterSpacing: 0.5,
+    fontFamily: "SpaceMono",
+  },
+  activeNote: {
+    color: Theme.colors.textMuted,
+    fontSize: 11,
+    textAlign: "center",
+    marginTop: Theme.spacing.md,
   },
 });

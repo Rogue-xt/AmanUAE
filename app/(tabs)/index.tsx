@@ -1,51 +1,31 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
+  ScrollView,
   StyleSheet,
   Text,
-  View,
   TextInput,
-  TouchableOpacity,
-  ScrollView,
-  FlatList,
-  Alert,
+  View,
 } from "react-native";
+import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { useApp, VehicleProfile } from "../../src/context/AppContext";
+import { Theme } from "@/constants/Theme";
+import { FadeInView } from "@/components/ui/FadeInView";
+import { KPICard } from "@/components/ui/KPICard";
+import { PremiumVehicleCard } from "@/components/ui/PremiumVehicleCard";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import { ScreenContainer, SectionHeader } from "@/components/ui/ScreenLayout";
+import { SegmentedChips } from "@/components/ui/SegmentedChips";
+import {
+  EMIRATES_LIST,
+  computeComplianceScore,
+  formatDocType,
+  formatEmirate,
+  getDaysRemaining,
+  getGreeting,
+  getUrgency,
+} from "@/components/ui/utils";
 
-// Simple list reference array to render the 7 emirates selector choices
-const EMIRATES_LIST: Array<VehicleProfile["emirate"]> = [
-  "Dubai",
-  "AbuDhabi",
-  "Sharjah",
-  "Ajman",
-  "RasAlKhaimah",
-  "UmmAlQuwain",
-  "Fujairah",
-];
-
-const getDaysRemaining = (expiryDate: string) => {
-  const today = new Date();
-  const expiry = new Date(`${expiryDate}T00:00:00`);
-  today.setHours(0, 0, 0, 0);
-
-  return Math.ceil(
-    (expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
-  );
-};
-
-const formatDocType = (type: string) => {
-  const map: Record<string, string> = {
-    EmiratesID: "Emirates ID",
-    Mulkiya: "Mulkiya",
-    DrivingLicense: "Driving License",
-    Passport: "Passport",
-    Visa: "Visa",
-    Insurance: "Insurance",
-    Ejari: "Ejari",
-    Other: "Other",
-  };
-
-  return map[type] || type;
-};
 export default function DashboardScreen() {
   const {
     vehicles,
@@ -57,34 +37,13 @@ export default function DashboardScreen() {
     startParkingSession,
   } = useApp();
 
-
-  const handleStartTestTimer = async () => {
-    await startParkingSession({
-      vehicleLabel: "Test Vehicle",
-      plateDetails: "A 12345",
-      parkingEmirate: "Dubai",
-      expiryTimestamp: Date.now() + 2 * 60 * 1000, // 2 minutes
-    });
-  };
-
-  const urgentDocuments = useMemo(() => {
-    return [...documents]
-      .map((doc) => ({
-        ...doc,
-        daysRemaining: getDaysRemaining(doc.expiryDate),
-      }))
-      .sort((a, b) => a.daysRemaining - b.daysRemaining)
-      .slice(0, 3);
-  }, [documents]);
-
-const [now, setNow] = useState(Date.now());
-  // Form input control state variables
+  const [now, setNow] = useState(Date.now());
   const [label, setLabel] = useState("");
   const [selectedEmirate, setSelectedEmirate] =
     useState<VehicleProfile["emirate"]>("Dubai");
   const [plateCode, setPlateCode] = useState("");
   const [plateNumber, setPlateNumber] = useState("");
-  
+
   useEffect(() => {
     if (activeTicket && activeTicket.expiryTimestamp <= now) {
       clearParkingSession();
@@ -106,13 +65,9 @@ const [now, setNow] = useState(Date.now());
         expired: true,
         minutes: 0,
         seconds: 0,
-        percent: 0,
         expiresAt: new Date(activeTicket.expiryTimestamp).toLocaleTimeString(
           [],
-          {
-            hour: "2-digit",
-            minute: "2-digit",
-          },
+          { hour: "2-digit", minute: "2-digit" },
         ),
       };
     }
@@ -125,14 +80,55 @@ const [now, setNow] = useState(Date.now());
       expired: false,
       minutes,
       seconds,
-      percent: 100,
       expiresAt: new Date(activeTicket.expiryTimestamp).toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
       }),
     };
   }, [activeTicket, now]);
-  // Handle data validation and dispatch to local storage
+
+  const urgentDocuments = useMemo(() => {
+    return [...documents]
+      .map((doc) => ({
+        ...doc,
+        daysRemaining: getDaysRemaining(doc.expiryDate),
+      }))
+      .sort((a, b) => a.daysRemaining - b.daysRemaining)
+      .slice(0, 3);
+  }, [documents]);
+
+  const alertCount = useMemo(() => {
+    return documents.filter((doc) => {
+      const days = getDaysRemaining(doc.expiryDate);
+      return getUrgency(days) !== "Safe";
+    }).length;
+  }, [documents]);
+
+  const complianceScore = useMemo(
+    () =>
+      computeComplianceScore(
+        documents,
+        !!activeTicket && !!ticketInfo && !ticketInfo.expired,
+      ),
+    [documents, activeTicket, ticketInfo],
+  );
+
+  const complianceColor =
+    complianceScore >= 80
+      ? Theme.colors.success
+      : complianceScore >= 50
+        ? Theme.colors.warning
+        : Theme.colors.danger;
+
+  const handleStartTestTimer = async () => {
+    await startParkingSession({
+      vehicleLabel: "Test Vehicle",
+      plateDetails: "A 12345",
+      parkingEmirate: "Dubai",
+      expiryTimestamp: Date.now() + 2 * 60 * 1000,
+    });
+  };
+
   const handleAddVehicle = async () => {
     if (!label.trim() || !plateCode.trim() || !plateNumber.trim()) {
       Alert.alert(
@@ -149,7 +145,6 @@ const [now, setNow] = useState(Date.now());
       plateNumber: plateNumber.trim(),
     });
 
-    // Reset fields for clear subsequent entries
     setLabel("");
     setPlateCode("");
     setPlateNumber("");
@@ -159,481 +154,671 @@ const [now, setNow] = useState(Date.now());
     );
   };
 
+  const handleViewVehicle = (vehicle: VehicleProfile) => {
+    Alert.alert(
+      vehicle.label,
+      `${formatEmirate(vehicle.emirate)}\nPlate: ${vehicle.plateCode} ${vehicle.plateNumber}`,
+    );
+  };
+
+  const handleDeleteVehicle = (vehicle: VehicleProfile) => {
+    Alert.alert(
+      "Remove Vehicle",
+      `Delete ${vehicle.label} from your vault?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => deleteVehicle(vehicle.id),
+        },
+      ],
+    );
+  };
+
+  const emirateOptions = EMIRATES_LIST.map((em) => ({
+    value: em,
+    label: formatEmirate(em),
+  }));
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.headerTitle}>ZoneGard Vault</Text>
-
-      <TouchableOpacity
-        style={styles.testTimerButton}
-        onPress={handleStartTestTimer}
+    <ScreenContainer>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.scrollContent}
       >
-        <Text style={styles.testTimerButtonText}>Start 2 Min Test Timer</Text>
-      </TouchableOpacity>
-
-      {activeTicket && ticketInfo && (
-        <View
-          style={[
-            styles.activeTicketCard,
-            ticketInfo.expired && styles.activeTicketExpired,
-          ]}
-        >
-          <View>
-            <Text style={styles.activeTicketTitle}>
-              {ticketInfo.expired ? "Parking Expired" : "Active Parking"}
-            </Text>
-
-            <Text style={styles.activeTicketVehicle}>
-              {activeTicket.vehicleLabel}
-            </Text>
-
-            <Text style={styles.activeTicketDetails}>
-              {activeTicket.parkingEmirate} • {activeTicket.plateDetails}
-            </Text>
-
-            <Text style={styles.activeTicketExpiry}>
-              Expires at {ticketInfo.expiresAt}
-            </Text>
-          </View>
-
-          <View style={styles.timerBox}>
-            <Text style={styles.timerText}>
-              {ticketInfo.expired
-                ? "00:00"
-                : `${String(ticketInfo.minutes).padStart(2, "0")}:${String(
-                    ticketInfo.seconds,
-                  ).padStart(2, "0")}`}
-            </Text>
-
-            <TouchableOpacity
-              style={styles.clearTicketButton}
-              onPress={clearParkingSession}
-            >
-              <Text style={styles.clearTicketText}>
-                {ticketInfo.expired ? "Clear" : "End"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      <View style={styles.dashboardCard}>
-        <View style={styles.dashboardCardHeader}>
-          <View>
-            <Text style={styles.dashboardCardTitle}>Critical Documents</Text>
-            <Text style={styles.dashboardCardSub}>
-              Nearest expiry records in your vault
-            </Text>
-          </View>
-          <Text style={styles.dashboardBadge}>{documents.length}</Text>
-        </View>
-
-        {urgentDocuments.length === 0 ? (
-          <Text style={styles.dashboardEmptyText}>
-            No documents tracked yet. Add records in the Vault tab.
-          </Text>
-        ) : (
-          urgentDocuments.map((doc) => (
-            <View key={doc.id} style={styles.urgentDocRow}>
-              <View>
-                <Text style={styles.urgentDocTitle}>
-                  {doc.title || formatDocType(doc.type)}
-                </Text>
-                <Text style={styles.urgentDocMeta}>
-                  {formatDocType(doc.type)} • {doc.expiryDate}
-                </Text>
-              </View>
-
-              <Text
-                style={[
-                  styles.urgentDocDays,
-                  doc.daysRemaining <= 30 && styles.urgentDocDanger,
-                ]}
-              >
-                {doc.daysRemaining < 0
-                  ? `${Math.abs(doc.daysRemaining)}d overdue`
-                  : `${doc.daysRemaining}d left`}
+        <FadeInView delay={0}>
+          <View style={styles.brandRow}>
+            <View style={styles.logoBox}>
+              <Text style={styles.logoText}>ZG</Text>
+            </View>
+            <View style={styles.brandText}>
+              <Text style={styles.brandName}>ZoneGard</Text>
+              <Text style={styles.brandTagline}>
+                UAE Parking & Document Shield
               </Text>
             </View>
-          ))
-        )}
-      </View>
-
-      {/* 1. LIST OF SECURED VEHICLES */}
-      <View style={styles.listSection}>
-        <Text style={styles.sectionTitle}>
-          Secured Vehicles ({vehicles.length})
-        </Text>
-        {vehicles.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>
-              No vehicles linked yet. Use the control form below to initialize.
-            </Text>
           </View>
-        ) : (
-          <FlatList
-            data={vehicles}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <View style={styles.vehicleCard}>
-                <View>
-                  <Text style={styles.cardLabel}>{item.label}</Text>
-                  <Text style={styles.cardDetails}>
-                    {item.emirate} • Code {item.plateCode} • {item.plateNumber}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => deleteVehicle(item.id)}
-                >
-                  <Text style={styles.deleteButtonText}>Wipe</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          />
-        )}
-      </View>
+          <Text style={styles.greeting}>{getGreeting()}</Text>
+        </FadeInView>
 
-      {/* 2. ADD NEW PROFILE CONTAINER FORM */}
-      <ScrollView
-        style={styles.formSection}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Text style={styles.sectionTitle}>Register Vehicle Profile</Text>
-
-        <TextInput
-          style={styles.inputField}
-          placeholder="Vehicle Nickname (e.g. My Nissan Patrol)"
-          placeholderTextColor="#777"
-          value={label}
-          onChangeText={setLabel}
-        />
-
-        {/* Emirate Selection Ribbon */}
-        <Text style={styles.inputSubLabel}>
-          Select Target Emirate Identity:
-        </Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.ribbonContainer}
-        >
-          {EMIRATES_LIST.map((em) => (
-            <TouchableOpacity
-              key={em}
-              style={[
-                styles.ribbonItem,
-                selectedEmirate === em && styles.ribbonItemActive,
-              ]}
-              onPress={() => setSelectedEmirate(em)}
-            >
+        <FadeInView delay={80}>
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryItem}>
+              <FontAwesome6
+                name="car-side"
+                size={14}
+                color={Theme.colors.primaryGlow}
+              />
+              <Text style={styles.summaryValue}>{vehicles.length}</Text>
+              <Text style={styles.summaryLabel}>Vehicles</Text>
+            </View>
+            <View style={styles.summaryDivider} />
+            <View style={styles.summaryItem}>
+              <FontAwesome6
+                name="file-shield"
+                size={14}
+                color={Theme.colors.primaryGlow}
+              />
+              <Text style={styles.summaryValue}>{documents.length}</Text>
+              <Text style={styles.summaryLabel}>Documents</Text>
+            </View>
+            <View style={styles.summaryDivider} />
+            <View style={styles.summaryItem}>
+              <FontAwesome6
+                name="bell"
+                size={14}
+                color={alertCount > 0 ? Theme.colors.warning : Theme.colors.textMuted}
+              />
               <Text
                 style={[
-                  styles.ribbonText,
-                  selectedEmirate === em && styles.ribbonTextActive,
+                  styles.summaryValue,
+                  alertCount > 0 && { color: Theme.colors.warning },
                 ]}
               >
-                {em === "AbuDhabi"
-                  ? "Abu Dhabi"
-                  : em === "RasAlKhaimah"
-                    ? "RAK"
-                    : em === "UmmAlQuwain"
-                      ? "UAQ"
-                      : em}
+                {alertCount}
               </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+              <Text style={styles.summaryLabel}>Alerts</Text>
+            </View>
+          </View>
+        </FadeInView>
 
-        <View style={styles.rowInputs}>
-          <TextInput
-            style={[styles.inputField, { flex: 0.3, marginRight: 10 }]}
-            placeholder="Code"
-            placeholderTextColor="#777"
-            value={plateCode}
-            onChangeText={setPlateCode}
-            autoCapitalize="characters"
-          />
-          <TextInput
-            style={[styles.inputField, { flex: 0.7 }]}
-            placeholder="Plate Number"
-            placeholderTextColor="#777"
-            value={plateNumber}
-            keyboardType="numeric"
-            onChangeText={setPlateNumber}
-          />
-        </View>
+        <FadeInView delay={160}>
+          {activeTicket && ticketInfo ? (
+            <View
+              style={[
+                styles.heroCard,
+                ticketInfo.expired && styles.heroCardExpired,
+              ]}
+            >
+              <View style={styles.heroTop}>
+                <View>
+                  <Text
+                    style={[
+                      styles.heroKicker,
+                      ticketInfo.expired && { color: Theme.colors.danger },
+                    ]}
+                  >
+                    {ticketInfo.expired ? "Session Expired" : "Active Parking"}
+                  </Text>
+                  <Text style={styles.heroVehicle}>{activeTicket.vehicleLabel}</Text>
+                  <Text style={styles.heroMeta}>
+                    {activeTicket.parkingEmirate} · {activeTicket.plateDetails}
+                  </Text>
+                </View>
+                <View style={styles.complianceRing}>
+                  <Text style={[styles.complianceValue, { color: complianceColor }]}>
+                    {complianceScore}%
+                  </Text>
+                  <Text style={styles.complianceLabel}>Score</Text>
+                </View>
+              </View>
 
-        <TouchableOpacity
-          style={styles.submitButton}
-          onPress={handleAddVehicle}
-        >
-          <Text style={styles.submitButtonText}>Secure Profile Entry</Text>
-        </TouchableOpacity>
+              <View style={styles.timerSection}>
+                <Text style={styles.timerLabel}>Time Remaining</Text>
+                <Text style={styles.timerDisplay}>
+                  {ticketInfo.expired
+                    ? "00:00"
+                    : `${String(ticketInfo.minutes).padStart(2, "0")}:${String(ticketInfo.seconds).padStart(2, "0")}`}
+                </Text>
+                <Text style={styles.expiryText}>
+                  Expires at {ticketInfo.expiresAt}
+                </Text>
+              </View>
+
+              <PrimaryButton
+                label={ticketInfo.expired ? "Clear Session" : "End Session"}
+                onPress={clearParkingSession}
+                variant="ghost"
+                style={styles.endButton}
+              />
+            </View>
+          ) : (
+            <View style={styles.heroCardEmpty}>
+              <View style={styles.emptyHeroIcon}>
+                <FontAwesome6
+                  name="square-parking"
+                  size={28}
+                  color={Theme.colors.primaryGlow}
+                />
+              </View>
+              <Text style={styles.emptyHeroTitle}>No Active Parking</Text>
+              <Text style={styles.emptyHeroSub}>
+                Start a session from the Parking tab or use the test timer below.
+              </Text>
+              <View style={styles.complianceBar}>
+                <Text style={styles.complianceBarLabel}>Compliance Score</Text>
+                <View style={styles.complianceBarTrack}>
+                  <View
+                    style={[
+                      styles.complianceBarFill,
+                      {
+                        width: `${complianceScore}%`,
+                        backgroundColor: complianceColor,
+                      },
+                    ]}
+                  />
+                </View>
+                <Text style={[styles.complianceBarValue, { color: complianceColor }]}>
+                  {complianceScore}%
+                </Text>
+              </View>
+            </View>
+          )}
+        </FadeInView>
+
+        <FadeInView delay={240}>
+          <View style={styles.kpiRow}>
+            <KPICard label="Vehicles" value={vehicles.length} />
+            <KPICard
+              label="Documents"
+              value={documents.length}
+              accent={Theme.colors.primaryGlow}
+            />
+            <KPICard
+              label="Alerts"
+              value={alertCount}
+              accent={alertCount > 0 ? Theme.colors.warning : undefined}
+            />
+          </View>
+        </FadeInView>
+
+        <FadeInView delay={320}>
+          <View style={styles.sectionCard}>
+            <SectionHeader
+              title="Critical Documents"
+              subtitle="Nearest expiry in your vault"
+              badge={documents.length}
+            />
+            {urgentDocuments.length === 0 ? (
+              <Text style={styles.emptyText}>
+                No documents tracked yet. Add records in the Vault tab.
+              </Text>
+            ) : (
+              urgentDocuments.map((doc) => (
+                <View key={doc.id} style={styles.docRow}>
+                  <View style={styles.docIcon}>
+                    <FontAwesome6
+                      name="file-lines"
+                      size={14}
+                      color={Theme.colors.primaryGlow}
+                    />
+                  </View>
+                  <View style={styles.docInfo}>
+                    <Text style={styles.docTitle}>
+                      {doc.title || formatDocType(doc.type)}
+                    </Text>
+                    <Text style={styles.docMeta}>
+                      {formatDocType(doc.type)} · {doc.expiryDate}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.docDays,
+                      doc.daysRemaining <= 30 && styles.docDaysDanger,
+                    ]}
+                  >
+                    {doc.daysRemaining < 0
+                      ? `${Math.abs(doc.daysRemaining)}d overdue`
+                      : `${doc.daysRemaining}d left`}
+                  </Text>
+                </View>
+              ))
+            )}
+          </View>
+        </FadeInView>
+
+        <FadeInView delay={400}>
+          <SectionHeader
+            title="Your Fleet"
+            subtitle={`${vehicles.length} registered vehicle${vehicles.length !== 1 ? "s" : ""}`}
+          />
+          {vehicles.length === 0 ? (
+            <View style={styles.emptyFleet}>
+              <FontAwesome6
+                name="car"
+                size={32}
+                color={Theme.colors.textMuted}
+              />
+              <Text style={styles.emptyFleetTitle}>No vehicles linked</Text>
+              <Text style={styles.emptyFleetSub}>
+                Register your first vehicle below to unlock smart parking.
+              </Text>
+            </View>
+          ) : (
+            vehicles.map((vehicle) => (
+              <PremiumVehicleCard
+                key={vehicle.id}
+                label={vehicle.label}
+                emirate={vehicle.emirate}
+                plateCode={vehicle.plateCode}
+                plateNumber={vehicle.plateNumber}
+                vehicleType={
+                  vehicle.label.toLowerCase().includes("patrol") ||
+                  vehicle.label.toLowerCase().includes("suv")
+                    ? "suv"
+                    : "sedan"
+                }
+                onView={() => handleViewVehicle(vehicle)}
+                onDelete={() => handleDeleteVehicle(vehicle)}
+              />
+            ))
+          )}
+        </FadeInView>
+
+        <FadeInView delay={480}>
+          <View style={styles.formCard}>
+            <SectionHeader
+              title="Register Vehicle"
+              subtitle="Add to your secure fleet"
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Vehicle nickname (e.g. My Patrol)"
+              placeholderTextColor={Theme.colors.textMuted}
+              value={label}
+              onChangeText={setLabel}
+            />
+
+            <Text style={styles.inputLabel}>Emirate</Text>
+            <SegmentedChips
+              options={emirateOptions}
+              selected={selectedEmirate}
+              onSelect={setSelectedEmirate}
+              horizontal
+            />
+
+            <View style={styles.plateInputs}>
+              <TextInput
+                style={[styles.input, styles.plateCodeInput]}
+                placeholder="Code"
+                placeholderTextColor={Theme.colors.textMuted}
+                value={plateCode}
+                onChangeText={setPlateCode}
+                autoCapitalize="characters"
+              />
+              <TextInput
+                style={[styles.input, styles.plateNumberInput]}
+                placeholder="Plate Number"
+                placeholderTextColor={Theme.colors.textMuted}
+                value={plateNumber}
+                keyboardType="numeric"
+                onChangeText={setPlateNumber}
+              />
+            </View>
+
+            <PrimaryButton
+              label="Secure Vehicle"
+              onPress={handleAddVehicle}
+              variant="success"
+            />
+          </View>
+        </FadeInView>
+
+        <FadeInView delay={560}>
+          <PrimaryButton
+            label="Start 2 Min Test Timer"
+            onPress={handleStartTestTimer}
+            variant="ghost"
+            icon={
+              <FontAwesome6
+                name="clock"
+                size={14}
+                color={Theme.colors.primaryGlow}
+              />
+            }
+          />
+        </FadeInView>
       </ScrollView>
-    </View>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scrollContent: {
+    paddingHorizontal: Theme.spacing.xl,
+    paddingBottom: 120,
+  },
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Theme.spacing.md,
+    marginBottom: Theme.spacing.sm,
+  },
+  logoBox: {
+    width: 52,
+    height: 52,
+    borderRadius: Theme.radius.lg,
+    backgroundColor: Theme.colors.elevated,
+    borderWidth: 1,
+    borderColor: Theme.colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    ...Theme.shadow.glow,
+  },
+  logoText: {
+    color: Theme.colors.primaryGlow,
+    fontSize: 18,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+  brandText: {
     flex: 1,
-    backgroundColor: "#0A0A0A",
-    paddingTop: 60,
-    paddingHorizontal: 20,
   },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#FFF",
-    marginBottom: 20,
-  },
-  listSection: {
-    flex: 0.45,
-    marginBottom: 15,
-  },
-  formSection: {
-    flex: 0.55,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#8E8E93",
-    marginBottom: 10,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  emptyCard: {
-    borderWidth: 1,
-    borderColor: "#222",
-    borderStyle: "dashed",
-    borderRadius: 8,
-    padding: 20,
-    alignItems: "center",
-  },
-  emptyText: {
-    color: "#555",
-    textAlign: "center",
-    fontSize: 14,
-  },
-  vehicleCard: {
-    backgroundColor: "#1C1C1E",
-    borderRadius: 10,
-    padding: 15,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  cardLabel: {
-    color: "#FFF",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  cardDetails: {
-    color: "#8E8E93",
-    fontSize: 13,
-    marginTop: 4,
-  },
-  deleteButton: {
-    backgroundColor: "#3A3A3C",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-  },
-  deleteButtonText: {
-    color: "#FF453A",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  inputField: {
-    backgroundColor: "#1C1C1E",
-    color: "#FFF",
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 15,
-    marginBottom: 12,
-  },
-  inputSubLabel: {
-    color: "#8E8E93",
-    fontSize: 13,
-    marginBottom: 8,
-  },
-  ribbonContainer: {
-    flexDirection: "row",
-    marginBottom: 15,
-  },
-  ribbonItem: {
-    backgroundColor: "#1C1C1E",
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    marginRight: 8,
-    height: 36,
-  },
-  ribbonItemActive: {
-    backgroundColor: "#0A84FF",
-  },
-  ribbonText: {
-    color: "#8E8E93",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  ribbonTextActive: {
-    color: "#FFF",
-  },
-  rowInputs: {
-    flexDirection: "row",
-    marginBottom: 15,
-  },
-  submitButton: {
-    backgroundColor: "#30D158",
-    borderRadius: 8,
-    padding: 15,
-    alignItems: "center",
-    marginBottom: 30,
-  },
-  submitButtonText: {
-    color: "#FFF",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  activeTicketCard: {
-    backgroundColor: "#102418",
-    borderColor: "#30D158",
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 18,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  activeTicketExpired: {
-    backgroundColor: "#2A1111",
-    borderColor: "#FF453A",
-  },
-  activeTicketTitle: {
-    color: "#30D158",
-    fontSize: 13,
+  brandName: {
+    color: Theme.colors.textPrimary,
+    fontSize: 22,
     fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    marginBottom: 6,
+    letterSpacing: -0.3,
   },
-  activeTicketVehicle: {
-    color: "#FFF",
+  brandTagline: {
+    color: Theme.colors.textMuted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  greeting: {
+    color: Theme.colors.textSecondary,
+    fontSize: 15,
+    fontWeight: "600",
+    marginBottom: Theme.spacing.xl,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    padding: Theme.spacing.lg,
+    marginBottom: Theme.spacing.lg,
+  },
+  summaryItem: {
+    flex: 1,
+    alignItems: "center",
+    gap: 4,
+  },
+  summaryDivider: {
+    width: 1,
+    backgroundColor: Theme.colors.border,
+    marginHorizontal: Theme.spacing.sm,
+  },
+  summaryValue: {
+    color: Theme.colors.textPrimary,
     fontSize: 18,
     fontWeight: "800",
   },
-  activeTicketDetails: {
-    color: "#A1A1AA",
+  summaryLabel: {
+    color: Theme.colors.textMuted,
+    fontSize: 10,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  heroCard: {
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.xxl,
+    padding: Theme.spacing.xl,
+    borderWidth: 1,
+    borderColor: Theme.colors.primary,
+    marginBottom: Theme.spacing.lg,
+    ...Theme.shadow.glow,
+  },
+  heroCardExpired: {
+    borderColor: Theme.colors.danger,
+    ...Theme.shadow.card,
+  },
+  heroTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: Theme.spacing.lg,
+  },
+  heroKicker: {
+    ...Theme.typography.label,
+    color: Theme.colors.success,
+    marginBottom: Theme.spacing.xs,
+  },
+  heroVehicle: {
+    color: Theme.colors.textPrimary,
+    fontSize: 20,
+    fontWeight: "800",
+  },
+  heroMeta: {
+    color: Theme.colors.textSecondary,
     fontSize: 13,
     marginTop: 4,
   },
-  activeTicketExpiry: {
-    color: "#8E8E93",
-    fontSize: 12,
-    marginTop: 6,
-  },
-  timerBox: {
+  complianceRing: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Theme.colors.surface,
+    borderWidth: 2,
+    borderColor: Theme.colors.border,
     alignItems: "center",
+    justifyContent: "center",
   },
-  timerText: {
-    color: "#FFF",
-    fontSize: 24,
+  complianceValue: {
+    fontSize: 16,
     fontWeight: "900",
   },
-  clearTicketButton: {
-    backgroundColor: "#1C1C1E",
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    marginTop: 8,
+  complianceLabel: {
+    color: Theme.colors.textMuted,
+    fontSize: 8,
+    fontWeight: "700",
+    textTransform: "uppercase",
   },
-  clearTicketText: {
-    color: "#FF453A",
-    fontSize: 12,
-    fontWeight: "800",
-  },
-  testTimerButton: {
-    backgroundColor: "#0A84FF",
-    borderRadius: 10,
-    padding: 12,
+  timerSection: {
+    backgroundColor: Theme.colors.surface,
+    borderRadius: Theme.radius.lg,
+    padding: Theme.spacing.lg,
     alignItems: "center",
-    marginBottom: 14,
+    marginBottom: Theme.spacing.md,
   },
-  testTimerButtonText: {
-    color: "#FFF",
+  timerLabel: {
+    ...Theme.typography.label,
+    color: Theme.colors.textMuted,
+    marginBottom: Theme.spacing.xs,
+  },
+  timerDisplay: {
+    ...Theme.typography.mono,
+    color: Theme.colors.textPrimary,
+  },
+  expiryText: {
+    color: Theme.colors.textSecondary,
+    fontSize: 12,
+    marginTop: Theme.spacing.xs,
+  },
+  endButton: {
+    marginTop: Theme.spacing.sm,
+  },
+  heroCardEmpty: {
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.xxl,
+    padding: Theme.spacing.xl,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    borderStyle: "dashed",
+    alignItems: "center",
+    marginBottom: Theme.spacing.lg,
+  },
+  emptyHeroIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Theme.colors.primaryMuted,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Theme.spacing.md,
+  },
+  emptyHeroTitle: {
+    color: Theme.colors.textPrimary,
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  emptyHeroSub: {
+    color: Theme.colors.textMuted,
+    fontSize: 13,
+    textAlign: "center",
+    marginTop: Theme.spacing.sm,
+    lineHeight: 19,
+  },
+  complianceBar: {
+    width: "100%",
+    marginTop: Theme.spacing.lg,
+  },
+  complianceBarLabel: {
+    ...Theme.typography.label,
+    color: Theme.colors.textMuted,
+    marginBottom: Theme.spacing.sm,
+  },
+  complianceBarTrack: {
+    height: 6,
+    backgroundColor: Theme.colors.surface,
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  complianceBarFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  complianceBarValue: {
     fontSize: 14,
     fontWeight: "800",
+    marginTop: Theme.spacing.sm,
+    textAlign: "right",
   },
-  // styles for docs in dash
-  dashboardCard: {
-    backgroundColor: "#111827",
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: "#1F2937",
-  },
-  dashboardCardHeader: {
+  kpiRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
+    gap: Theme.spacing.sm,
+    marginBottom: Theme.spacing.lg,
   },
-  dashboardCardTitle: {
-    color: "#FFF",
-    fontSize: 17,
-    fontWeight: "900",
+  sectionCard: {
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.xl,
+    padding: Theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    marginBottom: Theme.spacing.lg,
   },
-  dashboardCardSub: {
-    color: "#8E8E93",
-    fontSize: 12,
-    marginTop: 3,
-  },
-  dashboardBadge: {
-    color: "#30D158",
-    backgroundColor: "#102418",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    overflow: "hidden",
-    fontWeight: "900",
-    fontSize: 12,
-  },
-  dashboardEmptyText: {
-    color: "#71717A",
+  emptyText: {
+    color: Theme.colors.textMuted,
     fontSize: 13,
     lineHeight: 19,
   },
-  urgentDocRow: {
-    backgroundColor: "#0A0A0A",
-    borderRadius: 14,
-    padding: 13,
-    marginTop: 9,
-    borderWidth: 1,
-    borderColor: "#27272A",
+  docRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    backgroundColor: Theme.colors.surface,
+    borderRadius: Theme.radius.md,
+    padding: Theme.spacing.md,
+    marginTop: Theme.spacing.sm,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderSubtle,
   },
-  urgentDocTitle: {
-    color: "#FFF",
+  docIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: Theme.radius.sm,
+    backgroundColor: Theme.colors.primaryMuted,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: Theme.spacing.md,
+  },
+  docInfo: {
+    flex: 1,
+  },
+  docTitle: {
+    color: Theme.colors.textPrimary,
     fontSize: 14,
-    fontWeight: "900",
+    fontWeight: "700",
   },
-  urgentDocMeta: {
-    color: "#8E8E93",
+  docMeta: {
+    color: Theme.colors.textMuted,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  docDays: {
+    color: Theme.colors.warning,
     fontSize: 12,
-    marginTop: 4,
+    fontWeight: "800",
   },
-  urgentDocDays: {
-    color: "#FFD60A",
+  docDaysDanger: {
+    color: Theme.colors.danger,
+  },
+  emptyFleet: {
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.xl,
+    padding: Theme.spacing.xxl,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    borderStyle: "dashed",
+    marginBottom: Theme.spacing.lg,
+  },
+  emptyFleetTitle: {
+    color: Theme.colors.textPrimary,
+    fontSize: 16,
+    fontWeight: "700",
+    marginTop: Theme.spacing.md,
+  },
+  emptyFleetSub: {
+    color: Theme.colors.textMuted,
     fontSize: 13,
-    fontWeight: "900",
+    textAlign: "center",
+    marginTop: Theme.spacing.sm,
+    lineHeight: 19,
   },
-  urgentDocDanger: {
-    color: "#FF453A",
+  formCard: {
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.xl,
+    padding: Theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    marginBottom: Theme.spacing.lg,
+  },
+  input: {
+    backgroundColor: Theme.colors.surface,
+    color: Theme.colors.textPrimary,
+    borderRadius: Theme.radius.md,
+    padding: Theme.spacing.md,
+    fontSize: 15,
+    marginBottom: Theme.spacing.md,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  inputLabel: {
+    ...Theme.typography.label,
+    color: Theme.colors.textMuted,
+    marginBottom: Theme.spacing.sm,
+  },
+  plateInputs: {
+    flexDirection: "row",
+    gap: Theme.spacing.md,
+  },
+  plateCodeInput: {
+    flex: 0.35,
+  },
+  plateNumberInput: {
+    flex: 0.65,
   },
 });

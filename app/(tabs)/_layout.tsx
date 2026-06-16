@@ -1,53 +1,49 @@
-import React from 'react';
+import React from "react";
+import { Platform, StyleSheet } from "react-native";
+import { Tabs } from "expo-router";
+import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
+import { useClientOnlyValue } from "@/components/useClientOnlyValue";
+import { Theme } from "@/constants/Theme";
 
-import { Link, Tabs } from 'expo-router';
-import { Pressable } from 'react-native';
-import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
-import Colors from '@/constants/Colors';
-import { useColorScheme } from '@/components/useColorScheme';
-import { useClientOnlyValue } from '@/components/useClientOnlyValue';
-import { FontAwesome, FontAwesome6 } from '@expo/vector-icons';
-
-// You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
-function TabBarIcon(props: {
-  name: React.ComponentProps<typeof FontAwesome>['name'];
+function TabIcon({
+  name,
+  color,
+  focused,
+}: {
+  name: React.ComponentProps<typeof FontAwesome6>["name"];
   color: string;
+  focused: boolean;
 }) {
-  return <FontAwesome size={28} style={{ marginBottom: -3 }} {...props} />;
+  return (
+    <FontAwesome6
+      name={name}
+      size={focused ? 22 : 20}
+      color={color}
+      style={{ marginBottom: -2 }}
+    />
+  );
 }
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
-        // Disable the static render of the header on web
-        // to prevent a hydration error in React Navigation v6.
         headerShown: useClientOnlyValue(false, true),
+        tabBarActiveTintColor: Theme.colors.primaryGlow,
+        tabBarInactiveTintColor: Theme.colors.textMuted,
+        tabBarStyle: styles.tabBar,
+        tabBarItemStyle: styles.tabItem,
+        tabBarLabelStyle: styles.tabLabel,
+        tabBarHideOnKeyboard: true,
+        sceneStyle: { backgroundColor: Theme.colors.background },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: "Dashboard",
-          tabBarIcon: ({ color }) => (
-            <TabBarIcon name="dashboard" color={color} />
-          ),
-          headerRight: () => (
-            // <Link href="/modal" asChild>
-            <Pressable>
-              {({ pressed }) => (
-                <FontAwesome
-                  name="dashboard"
-                  size={25}
-                  color={Colors[colorScheme ?? "light"].text}
-                  style={{ marginRight: 15, opacity: pressed ? 0.5 : 1 }}
-                />
-              )}
-            </Pressable>
-            // </Link>
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name="gauge-high" color={color} focused={focused} />
           ),
         }}
       />
@@ -56,8 +52,8 @@ export default function TabLayout() {
         name="explore"
         options={{
           title: "Parking",
-          tabBarIcon: ({ color }) => (
-            <FontAwesome6 name="square-parking" size={24} color="white" />
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name="square-parking" color={color} focused={focused} />
           ),
         }}
       />
@@ -66,11 +62,39 @@ export default function TabLayout() {
         name="two"
         options={{
           title: "Vault",
-          tabBarIcon: ({ color }) => (
-            <FontAwesome6 name="folder-open" size={24} color="white" />
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name="shield-halved" color={color} focused={focused} />
           ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    position: "absolute",
+    bottom: Platform.OS === "ios" ? 28 : 16,
+    left: 16,
+    right: 16,
+    height: 64,
+    backgroundColor: Theme.colors.elevated,
+    borderRadius: Theme.radius.xxl,
+    borderTopWidth: 0,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    paddingBottom: 0,
+    paddingTop: 8,
+    ...Theme.shadow.card,
+    elevation: 12,
+  },
+  tabItem: {
+    paddingVertical: 4,
+  },
+  tabLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+    marginTop: 2,
+  },
+});

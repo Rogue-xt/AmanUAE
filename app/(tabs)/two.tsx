@@ -1,25 +1,38 @@
 import React, { useMemo, useState } from "react";
 import {
   Alert,
-  // Linking,
+  Image,
+  Modal,
+  Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
-  Modal,
-  Image,
-  Platform,
 } from "react-native";
 import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import * as DocumentPicker from "expo-document-picker";
 import * as Sharing from "expo-sharing";
-import { DocumentRecord, useApp } from "../../src/context/AppContext";
 import * as FileSystem from "expo-file-system/legacy";
-
+import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
+import { DocumentRecord, useApp } from "../../src/context/AppContext";
+import { Theme } from "@/constants/Theme";
+import { FadeInView } from "@/components/ui/FadeInView";
+import { KPICard } from "@/components/ui/KPICard";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import { ScreenContainer, ScreenHeader, SectionHeader } from "@/components/ui/ScreenLayout";
+import { SegmentedChips } from "@/components/ui/SegmentedChips";
+import { StatusPill } from "@/components/ui/StatusPill";
+import {
+  formatDocType,
+  formatFileSize,
+  getDaysRemaining,
+  getDocIconName,
+  getUrgency,
+} from "@/components/ui/utils";
 
 const DOCUMENT_TYPES: DocumentRecord["type"][] = [
   "EmiratesID",
@@ -32,74 +45,46 @@ const DOCUMENT_TYPES: DocumentRecord["type"][] = [
   "Other",
 ];
 
-const formatDocType = (type: DocumentRecord["type"]) => {
-  const map: Record<DocumentRecord["type"], string> = {
-    EmiratesID: "Emirates ID",
-    Mulkiya: "Mulkiya",
-    DrivingLicense: "Driving License",
-    Passport: "Passport",
-    Visa: "Visa",
-    Insurance: "Insurance",
-    Ejari: "Ejari",
-    Other: "Other",
-  };
-
-  return map[type];
+const URGENCY_BORDER: Record<
+  ReturnType<typeof getUrgency>,
+  string
+> = {
+  Safe: Theme.colors.success,
+  Warning: Theme.colors.warning,
+  Critical: Theme.colors.warning,
+  Expired: Theme.colors.danger,
 };
 
-const getDaysRemaining = (expiryDate: string) => {
-  const today = new Date();
-  const expiry = new Date(`${expiryDate}T00:00:00`);
-  today.setHours(0, 0, 0, 0);
-
-  return Math.ceil(
-    (expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
-  );
-};
-
-const getUrgency = (days: number) => {
-  if (days < 0) return "Expired";
-  if (days <= 30) return "Critical";
-  if (days <= 90) return "Warning";
-  return "Safe";
-};
-
-const formatFileSize = (size?: number) => {
-  if (!size) return "Unknown size";
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-};
-
-export default function TabTwoScreen() {
+export default function VaultScreen() {
   const { documents, addDocument, deleteDocument } = useApp();
-const [previewDoc, setPreviewDoc] = useState<DocumentRecord | null>(null);
+
+  const [previewDoc, setPreviewDoc] = useState<DocumentRecord | null>(null);
   const [selectedType, setSelectedType] =
     useState<DocumentRecord["type"]>("EmiratesID");
   const [title, setTitle] = useState("");
-const [expiryDate, setExpiryDate] = useState("");
-const [selectedDate, setSelectedDate] = useState(new Date());
-const [showDatePicker, setShowDatePicker] = useState(false);
+  const [expiryDate, setExpiryDate] = useState("");
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [pickedFile, setPickedFile] = useState<{
     name: string;
     uri: string;
     mimeType?: string;
     size?: number;
   } | null>(null);
-const formatDateForStorage = (date: Date) => {
-  return date.toISOString().split("T")[0];
-};
 
-const handleDateChange = (event: DateTimePickerEvent, date?: Date) => {
-  if (Platform.OS === "android") {
-    setShowDatePicker(false);
-  }
+  const formatDateForStorage = (date: Date) => {
+    return date.toISOString().split("T")[0];
+  };
 
-  if (!date) return;
+  const handleDateChange = (event: DateTimePickerEvent, date?: Date) => {
+    if (Platform.OS === "android") {
+      setShowDatePicker(false);
+    }
+    if (!date) return;
+    setSelectedDate(date);
+    setExpiryDate(formatDateForStorage(date));
+  };
 
-  setSelectedDate(date);
-  setExpiryDate(formatDateForStorage(date));
-};
   const sortedDocuments = useMemo(() => {
     return [...documents].sort(
       (a, b) => getDaysRemaining(a.expiryDate) - getDaysRemaining(b.expiryDate),
@@ -117,32 +102,36 @@ const handleDateChange = (event: DateTimePickerEvent, date?: Date) => {
     );
   }, [sortedDocuments]);
 
-const handlePickDocument = async () => {
-  const result = await DocumentPicker.getDocumentAsync({
-    type: ["application/pdf", "image/*"],
-    copyToCacheDirectory: true,
-    multiple: false,
-  });
+  const docTypeOptions = DOCUMENT_TYPES.map((type) => ({
+    value: type,
+    label: formatDocType(type),
+  }));
 
-  if (result.canceled) return;
+  const handlePickDocument = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ["application/pdf", "image/*"],
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
 
-  const asset = result.assets[0];
+    if (result.canceled) return;
 
-  const safeFileName = `${Date.now()}-${asset.name.replace(/\s+/g, "_")}`;
-  const permanentUri = `${FileSystem.documentDirectory}${safeFileName}`;
+    const asset = result.assets[0];
+    const safeFileName = `${Date.now()}-${asset.name.replace(/\s+/g, "_")}`;
+    const permanentUri = `${FileSystem.documentDirectory}${safeFileName}`;
 
-  await FileSystem.copyAsync({
-    from: asset.uri,
-    to: permanentUri,
-  });
+    await FileSystem.copyAsync({
+      from: asset.uri,
+      to: permanentUri,
+    });
 
-  setPickedFile({
-    name: asset.name,
-    uri: permanentUri,
-    mimeType: asset.mimeType,
-    size: asset.size,
-  });
-};
+    setPickedFile({
+      name: asset.name,
+      uri: permanentUri,
+      mimeType: asset.mimeType,
+      size: asset.size,
+    });
+  };
 
   const handleAddDocument = async () => {
     if (!title.trim()) {
@@ -177,43 +166,43 @@ const handlePickDocument = async () => {
     Alert.alert("Saved", "Document tracker secured in your local vault.");
   };
 
-const handleViewDocument = async (doc: DocumentRecord) => {
-  if (!doc.fileUri) {
-    Alert.alert("No File", "This tracker has no attached document.");
-    return;
-  }
-
-  const isImage =
-    doc.mimeType?.startsWith("image/") ||
-    doc.fileName?.toLowerCase().endsWith(".jpg") ||
-    doc.fileName?.toLowerCase().endsWith(".jpeg") ||
-    doc.fileName?.toLowerCase().endsWith(".png");
-
-  if (isImage) {
-    setPreviewDoc(doc);
-    return;
-  }
-
-  try {
-    const available = await Sharing.isAvailableAsync();
-
-    if (!available) {
-      Alert.alert(
-        "Unavailable",
-        "Opening files is not available on this device.",
-      );
+  const handleViewDocument = async (doc: DocumentRecord) => {
+    if (!doc.fileUri) {
+      Alert.alert("No File", "This tracker has no attached document.");
       return;
     }
 
-    await Sharing.shareAsync(doc.fileUri, {
-      mimeType: doc.mimeType,
-      dialogTitle: "Open document",
-    });
-  } catch (error) {
-    console.error("Failed to open document:", error);
-    Alert.alert("Open Failed", "Could not open this document.");
-  }
-};
+    const isImage =
+      doc.mimeType?.startsWith("image/") ||
+      doc.fileName?.toLowerCase().endsWith(".jpg") ||
+      doc.fileName?.toLowerCase().endsWith(".jpeg") ||
+      doc.fileName?.toLowerCase().endsWith(".png");
+
+    if (isImage) {
+      setPreviewDoc(doc);
+      return;
+    }
+
+    try {
+      const available = await Sharing.isAvailableAsync();
+      if (!available) {
+        Alert.alert(
+          "Unavailable",
+          "Opening files is not available on this device.",
+        );
+        return;
+      }
+
+      await Sharing.shareAsync(doc.fileUri, {
+        mimeType: doc.mimeType,
+        dialogTitle: "Open document",
+      });
+    } catch (error) {
+      console.error("Failed to open document:", error);
+      Alert.alert("Open Failed", "Could not open this document.");
+    }
+  };
+
   const handleShareDocument = async (doc: DocumentRecord) => {
     if (!doc.fileUri) {
       Alert.alert("No File", "This tracker has no attached document.");
@@ -221,7 +210,6 @@ const handleViewDocument = async (doc: DocumentRecord) => {
     }
 
     const available = await Sharing.isAvailableAsync();
-
     if (!available) {
       Alert.alert("Sharing Unavailable", "Sharing is not available here.");
       return;
@@ -230,231 +218,272 @@ const handleViewDocument = async (doc: DocumentRecord) => {
     await Sharing.shareAsync(doc.fileUri);
   };
 
+  const handleDeleteDocument = (doc: DocumentRecord) => {
+    Alert.alert("Delete Document", `Remove "${doc.title}" from vault?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => deleteDocument(doc.id),
+      },
+    ]);
+  };
+
   return (
-    <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.heroCard}>
-          <Text style={styles.kicker}>ZoneGard Secure Vault</Text>
-          <Text style={styles.headerTitle}>Document Expiry Shield</Text>
-          <Text style={styles.headerSubtitle}>
-            Store critical UAE documents, track expiry, and retrieve them when
-            needed.
-          </Text>
+    <ScreenContainer>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.scrollContent}
+      >
+        <FadeInView delay={0}>
+          <ScreenHeader
+            kicker="Secure Document Vault"
+            title="Document Shield"
+            subtitle="Store critical UAE documents, track expiry, and retrieve when needed."
+          />
+        </FadeInView>
 
-          <View style={styles.statsGrid}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{documents.length}</Text>
-              <Text style={styles.statLabel}>Total</Text>
+        <FadeInView delay={80}>
+          <View style={styles.heroCard}>
+            <View style={styles.heroIcon}>
+              <FontAwesome6
+                name="shield-halved"
+                size={24}
+                color={Theme.colors.primaryGlow}
+              />
             </View>
-            <View style={styles.statBox}>
-              <Text style={[styles.statValue, styles.redText]}>
-                {stats.Critical + stats.Expired}
-              </Text>
-              <Text style={styles.statLabel}>Urgent</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={[styles.statValue, styles.yellowText]}>
-                {stats.Warning}
-              </Text>
-              <Text style={styles.statLabel}>Warning</Text>
+            <View style={styles.kpiRow}>
+              <KPICard label="Total" value={documents.length} />
+              <KPICard
+                label="Critical"
+                value={stats.Critical + stats.Expired}
+                accent={Theme.colors.danger}
+              />
+              <KPICard
+                label="Warning"
+                value={stats.Warning}
+                accent={Theme.colors.warning}
+              />
             </View>
           </View>
-        </View>
+        </FadeInView>
 
-        <View style={styles.formCard}>
-          <View style={styles.formHeader}>
-            <Text style={styles.sectionTitle}>Add New Document</Text>
-            <Text style={styles.secureBadge}>LOCAL ONLY</Text>
-          </View>
+        <FadeInView delay={160}>
+          <View style={styles.formCard}>
+            <View style={styles.formHeader}>
+              <SectionHeader title="Add Document" subtitle="Local encrypted storage" />
+              <View style={styles.secureBadge}>
+                <FontAwesome6 name="lock" size={10} color={Theme.colors.success} />
+                <Text style={styles.secureBadgeText}>LOCAL ONLY</Text>
+              </View>
+            </View>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.typeRibbon}
-          >
-            {DOCUMENT_TYPES.map((type) => (
-              <TouchableOpacity
-                key={type}
-                style={[
-                  styles.typeChip,
-                  selectedType === type && styles.typeChipActive,
-                ]}
-                onPress={() => setSelectedType(type)}
-              >
-                <Text
-                  style={[
-                    styles.typeChipText,
-                    selectedType === type && styles.typeChipTextActive,
-                  ]}
-                >
-                  {formatDocType(type)}
+            <SegmentedChips
+              options={docTypeOptions}
+              selected={selectedType}
+              onSelect={setSelectedType}
+              horizontal
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Document title"
+              placeholderTextColor={Theme.colors.textMuted}
+              value={title}
+              onChangeText={setTitle}
+            />
+
+            <Pressable
+              style={styles.dateButton}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <View>
+                <Text style={styles.dateLabel}>Expiry Date</Text>
+                <Text style={styles.dateValue}>
+                  {expiryDate || "Select expiry date"}
                 </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+              </View>
+              <FontAwesome6
+                name="calendar"
+                size={18}
+                color={Theme.colors.primaryGlow}
+              />
+            </Pressable>
 
-          <TextInput
-            style={styles.inputField}
-            placeholder="Document Title"
-            placeholderTextColor="#777"
-            value={title}
-            onChangeText={setTitle}
+            {showDatePicker && (
+              <DateTimePicker
+                value={selectedDate}
+                mode="date"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                onChange={handleDateChange}
+              />
+            )}
+
+            <Pressable style={styles.uploadZone} onPress={handlePickDocument}>
+              <View style={styles.uploadIcon}>
+                <FontAwesome6
+                  name="cloud-arrow-up"
+                  size={22}
+                  color={Theme.colors.primaryGlow}
+                />
+              </View>
+              <View style={styles.uploadText}>
+                <Text style={styles.uploadTitle}>
+                  {pickedFile ? pickedFile.name : "Secure Upload Zone"}
+                </Text>
+                <Text style={styles.uploadSub}>
+                  {pickedFile
+                    ? formatFileSize(pickedFile.size)
+                    : "Attach PDF or image — Mulkiya, Emirates ID, visa"}
+                </Text>
+              </View>
+            </Pressable>
+
+            <PrimaryButton
+              label="Secure Document"
+              onPress={handleAddDocument}
+              variant="success"
+              icon={
+                <FontAwesome6
+                  name="shield"
+                  size={14}
+                  color={Theme.colors.textPrimary}
+                />
+              }
+            />
+          </View>
+        </FadeInView>
+
+        <FadeInView delay={240}>
+          <SectionHeader
+            title="Vault Items"
+            subtitle={`${sortedDocuments.length} secured record${sortedDocuments.length !== 1 ? "s" : ""}`}
           />
 
-          <TouchableOpacity
-            style={styles.datePickerButton}
-            onPress={() => setShowDatePicker(true)}
-          >
-            <View>
-              <Text style={styles.datePickerLabel}>Expiry Date</Text>
-              <Text style={styles.datePickerValue}>
-                {expiryDate || "Select expiry date"}
+          {sortedDocuments.length === 0 ? (
+            <View style={styles.emptyVault}>
+              <FontAwesome6
+                name="folder-open"
+                size={36}
+                color={Theme.colors.textMuted}
+              />
+              <Text style={styles.emptyTitle}>Vault is empty</Text>
+              <Text style={styles.emptySub}>
+                Add your first expiry tracker with an optional PDF or image
+                attachment.
               </Text>
             </View>
-            <Text style={styles.datePickerIcon}>📅</Text>
-          </TouchableOpacity>
+          ) : (
+            sortedDocuments.map((doc, index) => {
+              const days = getDaysRemaining(doc.expiryDate);
+              const urgency = getUrgency(days);
+              const borderColor = URGENCY_BORDER[urgency];
 
-          {showDatePicker && (
-            <DateTimePicker
-              value={selectedDate}
-              mode="date"
-              display={Platform.OS === "ios" ? "spinner" : "default"}
-              onChange={handleDateChange}
-            />
+              return (
+                <FadeInView key={doc.id} delay={280 + index * 40}>
+                  <View
+                    style={[
+                      styles.docCard,
+                      { borderLeftColor: borderColor },
+                    ]}
+                  >
+                    <View style={styles.docTop}>
+                      <View style={styles.docIconBox}>
+                        <FontAwesome6
+                          name={getDocIconName(doc.type)}
+                          size={18}
+                          color={Theme.colors.primaryGlow}
+                        />
+                      </View>
+                      <View style={styles.docInfo}>
+                        <Text style={styles.docTitle}>{doc.title}</Text>
+                        <Text style={styles.docType}>
+                          {formatDocType(doc.type)}
+                        </Text>
+                      </View>
+                      <StatusPill status={urgency} />
+                    </View>
+
+                    <View style={styles.expiryRow}>
+                      <View>
+                        <Text style={styles.expiryLabel}>Expires</Text>
+                        <Text style={styles.expiryDate}>{doc.expiryDate}</Text>
+                      </View>
+                      <View style={styles.daysBlock}>
+                        <Text style={styles.daysValue}>
+                          {days < 0 ? Math.abs(days) : days}
+                        </Text>
+                        <Text style={styles.daysLabel}>
+                          {days < 0 ? "days overdue" : "days left"}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.fileInfo}>
+                      <FontAwesome6
+                        name="paperclip"
+                        size={12}
+                        color={Theme.colors.textMuted}
+                      />
+                      <Text style={styles.fileText}>
+                        {doc.fileName
+                          ? `${doc.fileName} · ${formatFileSize(doc.fileSize)}`
+                          : "No file attached"}
+                      </Text>
+                    </View>
+
+                    <View style={styles.actions}>
+                      <Pressable
+                        style={[
+                          styles.actionBtn,
+                          !doc.fileUri && styles.actionDisabled,
+                        ]}
+                        onPress={() => handleViewDocument(doc)}
+                      >
+                        <FontAwesome6
+                          name="eye"
+                          size={12}
+                          color={Theme.colors.textSecondary}
+                        />
+                        <Text style={styles.actionText}>View</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[
+                          styles.actionBtn,
+                          !doc.fileUri && styles.actionDisabled,
+                        ]}
+                        onPress={() => handleShareDocument(doc)}
+                      >
+                        <FontAwesome6
+                          name="share-nodes"
+                          size={12}
+                          color={Theme.colors.textSecondary}
+                        />
+                        <Text style={styles.actionText}>Share</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.actionBtn, styles.deleteBtn]}
+                        onPress={() => handleDeleteDocument(doc)}
+                      >
+                        <FontAwesome6
+                          name="trash"
+                          size={12}
+                          color={Theme.colors.danger}
+                        />
+                        <Text style={[styles.actionText, styles.deleteText]}>
+                          Delete
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </FadeInView>
+              );
+            })
           )}
-
-          <TouchableOpacity
-            style={styles.attachmentBox}
-            onPress={handlePickDocument}
-          >
-            <Text style={styles.attachmentIcon}>📎</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.attachmentTitle}>
-                {pickedFile ? pickedFile.name : "Attach PDF or Image"}
-              </Text>
-              <Text style={styles.attachmentSub}>
-                {pickedFile
-                  ? formatFileSize(pickedFile.size)
-                  : "Mulkiya, Emirates ID, license, visa, insurance"}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.submitButton}
-            onPress={handleAddDocument}
-          >
-            <Text style={styles.submitButtonText}>Secure Document</Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.sectionTitle}>Vault Items</Text>
-
-        {sortedDocuments.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyIcon}>🗂️</Text>
-            <Text style={styles.emptyTitle}>No documents secured yet</Text>
-            <Text style={styles.emptyText}>
-              Add your first expiry tracker with an optional PDF or image
-              attachment.
-            </Text>
-          </View>
-        ) : (
-          sortedDocuments.map((doc) => {
-            const days = getDaysRemaining(doc.expiryDate);
-            const urgency = getUrgency(days);
-
-            return (
-              <View
-                key={doc.id}
-                style={[
-                  styles.documentCard,
-                  urgency === "Expired" && styles.expiredCard,
-                  urgency === "Critical" && styles.criticalCard,
-                  urgency === "Warning" && styles.warningCard,
-                  urgency === "Safe" && styles.safeCard,
-                ]}
-              >
-                <View style={styles.docTopRow}>
-                  <View style={styles.docIconBox}>
-                    <Text style={styles.docIcon}>
-                      {doc.type === "Mulkiya"
-                        ? "🚗"
-                        : doc.type === "Passport"
-                          ? "🛂"
-                          : doc.type === "Visa"
-                            ? "🧾"
-                            : doc.type === "Insurance"
-                              ? "🛡️"
-                              : "📄"}
-                    </Text>
-                  </View>
-
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.documentTitle}>{doc.title}</Text>
-                    <Text style={styles.documentType}>
-                      {formatDocType(doc.type)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.statusPill}>
-                    <Text style={styles.statusPillText}>{urgency}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.expiryPanel}>
-                  <Text style={styles.expiryLabel}>Expires</Text>
-                  <Text style={styles.expiryDate}>{doc.expiryDate}</Text>
-                  <Text style={styles.daysText}>
-                    {days < 0
-                      ? `${Math.abs(days)} days overdue`
-                      : `${days} days remaining`}
-                  </Text>
-                </View>
-
-                <View style={styles.fileRow}>
-                  <Text style={styles.fileText}>
-                    {doc.fileName
-                      ? `📎 ${doc.fileName} • ${formatFileSize(doc.fileSize)}`
-                      : "No file attached"}
-                  </Text>
-                </View>
-
-                <View style={styles.actionsRow}>
-                  <TouchableOpacity
-                    style={[
-                      styles.actionButton,
-                      !doc.fileUri && styles.disabledAction,
-                    ]}
-                    onPress={() => handleViewDocument(doc)}
-                  >
-                    <Text style={styles.actionText}>View</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.actionButton,
-                      !doc.fileUri && styles.disabledAction,
-                    ]}
-                    onPress={() => handleShareDocument(doc)}
-                  >
-                    <Text style={styles.actionText}>Share</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => deleteDocument(doc.id)}
-                  >
-                    <Text style={styles.deleteButtonText}>Delete</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          })
-        )}
-
-        <View style={{ height: 30 }} />
+        </FadeInView>
       </ScrollView>
+
       <Modal
         visible={!!previewDoc}
         transparent
@@ -463,19 +492,17 @@ const handleViewDocument = async (doc: DocumentRecord) => {
       >
         <View style={styles.previewOverlay}>
           <View style={styles.previewHeader}>
-            <View style={{ flex: 1 }}>
+            <View style={styles.previewHeaderText}>
               <Text style={styles.previewTitle}>{previewDoc?.title}</Text>
               <Text style={styles.previewSub}>{previewDoc?.fileName}</Text>
             </View>
-
-            <TouchableOpacity
-              style={styles.previewCloseButton}
+            <PrimaryButton
+              label="Close"
               onPress={() => setPreviewDoc(null)}
-            >
-              <Text style={styles.previewCloseText}>Close</Text>
-            </TouchableOpacity>
+              variant="ghost"
+              style={styles.previewClose}
+            />
           </View>
-
           {previewDoc?.fileUri && (
             <Image
               source={{ uri: previewDoc.fileUri }}
@@ -485,391 +512,303 @@ const handleViewDocument = async (doc: DocumentRecord) => {
           )}
         </View>
       </Modal>
-    </View>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#050506",
-    paddingTop: 54,
-    paddingHorizontal: 18,
+  scrollContent: {
+    paddingHorizontal: Theme.spacing.xl,
+    paddingBottom: 120,
   },
   heroCard: {
-    backgroundColor: "#111827",
-    borderRadius: 24,
-    padding: 22,
-    marginBottom: 18,
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.xxl,
+    padding: Theme.spacing.xl,
     borderWidth: 1,
-    borderColor: "#1F2937",
+    borderColor: Theme.colors.border,
+    marginBottom: Theme.spacing.lg,
   },
-  kicker: {
-    color: "#30D158",
-    fontSize: 11,
-    fontWeight: "900",
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-    marginBottom: 8,
+  heroIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: Theme.radius.lg,
+    backgroundColor: Theme.colors.primaryMuted,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Theme.spacing.lg,
   },
-  headerTitle: {
-    color: "#FFF",
-    fontSize: 28,
-    fontWeight: "900",
-    letterSpacing: -0.8,
-  },
-  headerSubtitle: {
-    color: "#A1A1AA",
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 8,
-  },
-  statsGrid: {
+  kpiRow: {
     flexDirection: "row",
-    gap: 10,
-    marginTop: 18,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: "#0A0A0A",
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#27272A",
-  },
-  statValue: {
-    color: "#FFF",
-    fontSize: 22,
-    fontWeight: "900",
-  },
-  statLabel: {
-    color: "#71717A",
-    fontSize: 11,
-    fontWeight: "800",
-    marginTop: 4,
-    textTransform: "uppercase",
-  },
-  redText: {
-    color: "#FF453A",
-  },
-  yellowText: {
-    color: "#FFD60A",
+    gap: Theme.spacing.sm,
   },
   formCard: {
-    backgroundColor: "#121214",
-    borderRadius: 22,
-    padding: 16,
-    marginBottom: 20,
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.xxl,
+    padding: Theme.spacing.lg,
     borderWidth: 1,
-    borderColor: "#262629",
+    borderColor: Theme.colors.border,
+    marginBottom: Theme.spacing.lg,
   },
   formHeader: {
     flexDirection: "row",
+    alignItems: "flex-start",
     justifyContent: "space-between",
-    alignItems: "center",
-  },
-  sectionTitle: {
-    color: "#A1A1AA",
-    fontSize: 12,
-    fontWeight: "900",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    marginBottom: 12,
+    marginBottom: Theme.spacing.sm,
   },
   secureBadge: {
-    color: "#30D158",
-    fontSize: 10,
-    fontWeight: "900",
-    backgroundColor: "#102418",
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 999,
-    overflow: "hidden",
-  },
-  typeRibbon: {
-    marginBottom: 14,
-  },
-  typeChip: {
-    backgroundColor: "#1C1C1E",
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    marginRight: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: Theme.colors.successMuted,
+    paddingHorizontal: Theme.spacing.sm,
+    paddingVertical: 4,
+    borderRadius: Theme.radius.full,
     borderWidth: 1,
-    borderColor: "#2C2C2E",
+    borderColor: Theme.colors.success,
   },
-  typeChipActive: {
-    backgroundColor: "#0A84FF",
-    borderColor: "#0A84FF",
-  },
-  typeChipText: {
-    color: "#A1A1AA",
-    fontSize: 13,
+  secureBadgeText: {
+    color: Theme.colors.success,
+    fontSize: 9,
     fontWeight: "800",
+    letterSpacing: 0.5,
   },
-  typeChipTextActive: {
-    color: "#FFF",
-  },
-  inputField: {
-    backgroundColor: "#050506",
-    color: "#FFF",
-    borderRadius: 14,
-    padding: 14,
+  input: {
+    backgroundColor: Theme.colors.surface,
+    color: Theme.colors.textPrimary,
+    borderRadius: Theme.radius.md,
+    padding: Theme.spacing.md,
     fontSize: 15,
-    marginBottom: 12,
+    marginBottom: Theme.spacing.md,
     borderWidth: 1,
-    borderColor: "#27272A",
+    borderColor: Theme.colors.border,
   },
-  attachmentBox: {
-    backgroundColor: "#0A0A0A",
-    borderRadius: 16,
-    padding: 15,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "#2C2C2E",
-    borderStyle: "dashed",
+  dateButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    justifyContent: "space-between",
+    backgroundColor: Theme.colors.surface,
+    borderRadius: Theme.radius.md,
+    padding: Theme.spacing.md,
+    marginBottom: Theme.spacing.md,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
   },
-  attachmentIcon: {
-    fontSize: 24,
+  dateLabel: {
+    ...Theme.typography.label,
+    color: Theme.colors.textMuted,
+    marginBottom: 4,
   },
-  attachmentTitle: {
-    color: "#FFF",
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  attachmentSub: {
-    color: "#71717A",
-    fontSize: 12,
-    marginTop: 3,
-  },
-  submitButton: {
-    backgroundColor: "#30D158",
-    borderRadius: 15,
-    padding: 15,
-    alignItems: "center",
-  },
-  submitButtonText: {
-    color: "#FFF",
+  dateValue: {
+    color: Theme.colors.textPrimary,
     fontSize: 15,
-    fontWeight: "900",
+    fontWeight: "700",
   },
-  emptyCard: {
-    backgroundColor: "#121214",
-    borderRadius: 22,
-    padding: 26,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#262629",
-    borderStyle: "dashed",
-  },
-  emptyIcon: {
-    fontSize: 34,
-    marginBottom: 8,
-  },
-  emptyTitle: {
-    color: "#FFF",
-    fontSize: 17,
-    fontWeight: "900",
-  },
-  emptyText: {
-    color: "#71717A",
-    textAlign: "center",
-    marginTop: 8,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  documentCard: {
-    borderRadius: 24,
-    padding: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-  },
-  safeCard: {
-    backgroundColor: "#0D1F15",
-    borderColor: "#30D158",
-  },
-  warningCard: {
-    backgroundColor: "#211B08",
-    borderColor: "#FFD60A",
-  },
-  criticalCard: {
-    backgroundColor: "#251408",
-    borderColor: "#FF9F0A",
-  },
-  expiredCard: {
-    backgroundColor: "#260D0D",
-    borderColor: "#FF453A",
-  },
-  docTopRow: {
+  uploadZone: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: Theme.spacing.md,
+    backgroundColor: Theme.colors.surface,
+    borderRadius: Theme.radius.lg,
+    padding: Theme.spacing.lg,
+    marginBottom: Theme.spacing.lg,
+    borderWidth: 1.5,
+    borderColor: Theme.colors.border,
+    borderStyle: "dashed",
   },
-  docIconBox: {
+  uploadIcon: {
     width: 44,
     height: 44,
-    borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: Theme.radius.md,
+    backgroundColor: Theme.colors.primaryMuted,
     alignItems: "center",
     justifyContent: "center",
   },
-  docIcon: {
-    fontSize: 22,
+  uploadText: {
+    flex: 1,
   },
-  documentTitle: {
-    color: "#FFF",
-    fontSize: 17,
-    fontWeight: "900",
-  },
-  documentType: {
-    color: "#D4D4D8",
-    fontSize: 12,
-    marginTop: 3,
+  uploadTitle: {
+    color: Theme.colors.textPrimary,
+    fontSize: 14,
     fontWeight: "700",
   },
-  statusPill: {
-    backgroundColor: "rgba(255,255,255,0.12)",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+  uploadSub: {
+    color: Theme.colors.textMuted,
+    fontSize: 12,
+    marginTop: 3,
+    lineHeight: 17,
   },
-  statusPillText: {
-    color: "#FFF",
-    fontSize: 10,
-    fontWeight: "900",
-    textTransform: "uppercase",
+  emptyVault: {
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.xxl,
+    padding: Theme.spacing.xxxl,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    borderStyle: "dashed",
   },
-  expiryPanel: {
-    backgroundColor: "rgba(0,0,0,0.28)",
-    borderRadius: 18,
-    padding: 14,
-    marginTop: 14,
+  emptyTitle: {
+    color: Theme.colors.textPrimary,
+    fontSize: 17,
+    fontWeight: "700",
+    marginTop: Theme.spacing.md,
+  },
+  emptySub: {
+    color: Theme.colors.textMuted,
+    fontSize: 13,
+    textAlign: "center",
+    marginTop: Theme.spacing.sm,
+    lineHeight: 19,
+  },
+  docCard: {
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.xl,
+    padding: Theme.spacing.lg,
+    marginBottom: Theme.spacing.md,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    borderLeftWidth: 3,
+  },
+  docTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Theme.spacing.md,
+  },
+  docIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: Theme.radius.md,
+    backgroundColor: Theme.colors.elevated,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: Theme.colors.borderSubtle,
+  },
+  docInfo: {
+    flex: 1,
+  },
+  docTitle: {
+    color: Theme.colors.textPrimary,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  docType: {
+    color: Theme.colors.textMuted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  expiryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: Theme.colors.surface,
+    borderRadius: Theme.radius.md,
+    padding: Theme.spacing.md,
+    marginTop: Theme.spacing.md,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderSubtle,
   },
   expiryLabel: {
-    color: "#A1A1AA",
-    fontSize: 11,
-    fontWeight: "800",
-    textTransform: "uppercase",
+    ...Theme.typography.label,
+    color: Theme.colors.textMuted,
   },
   expiryDate: {
-    color: "#FFF",
-    fontSize: 20,
-    fontWeight: "900",
-    marginTop: 3,
-  },
-  daysText: {
-    color: "#F4F4F5",
-    fontSize: 13,
+    color: Theme.colors.textPrimary,
+    fontSize: 16,
     fontWeight: "800",
-    marginTop: 4,
+    marginTop: 2,
   },
-  fileRow: {
-    marginTop: 12,
+  daysBlock: {
+    alignItems: "flex-end",
+  },
+  daysValue: {
+    color: Theme.colors.textPrimary,
+    fontSize: 22,
+    fontWeight: "800",
+  },
+  daysLabel: {
+    color: Theme.colors.textMuted,
+    fontSize: 10,
+    fontWeight: "600",
+  },
+  fileInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Theme.spacing.sm,
+    marginTop: Theme.spacing.md,
   },
   fileText: {
-    color: "#E5E7EB",
+    color: Theme.colors.textSecondary,
     fontSize: 12,
-    fontWeight: "700",
-  },
-  actionsRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 14,
-  },
-  actionButton: {
     flex: 1,
-    backgroundColor: "rgba(255,255,255,0.14)",
-    borderRadius: 13,
-    paddingVertical: 11,
-    alignItems: "center",
   },
-  disabledAction: {
+  actions: {
+    flexDirection: "row",
+    gap: Theme.spacing.sm,
+    marginTop: Theme.spacing.md,
+    paddingTop: Theme.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Theme.colors.borderSubtle,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: Theme.colors.elevated,
+    paddingVertical: Theme.spacing.sm,
+    borderRadius: Theme.radius.md,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  actionDisabled: {
     opacity: 0.35,
   },
   actionText: {
-    color: "#FFF",
-    fontSize: 13,
-    fontWeight: "900",
+    color: Theme.colors.textSecondary,
+    fontSize: 12,
+    fontWeight: "700",
   },
-  deleteButton: {
-    flex: 1,
-    backgroundColor: "#1C1C1E",
-    borderRadius: 13,
-    paddingVertical: 11,
-    alignItems: "center",
+  deleteBtn: {
+    borderColor: Theme.colors.dangerMuted,
+    backgroundColor: Theme.colors.dangerMuted,
   },
-  deleteButtonText: {
-    color: "#FF453A",
-    fontSize: 13,
-    fontWeight: "900",
+  deleteText: {
+    color: Theme.colors.danger,
   },
-  //modal
   previewOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.96)",
+    backgroundColor: "rgba(9, 9, 11, 0.97)",
     paddingTop: 54,
-    paddingHorizontal: 16,
+    paddingHorizontal: Theme.spacing.lg,
   },
   previewHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: Theme.spacing.lg,
+    gap: Theme.spacing.md,
+  },
+  previewHeaderText: {
+    flex: 1,
   },
   previewTitle: {
-    color: "#FFF",
+    color: Theme.colors.textPrimary,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "800",
   },
   previewSub: {
-    color: "#8E8E93",
+    color: Theme.colors.textMuted,
     fontSize: 12,
     marginTop: 3,
   },
-  previewCloseButton: {
-    backgroundColor: "#1C1C1E",
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-  },
-  previewCloseText: {
-    color: "#FFF",
-    fontSize: 13,
-    fontWeight: "900",
+  previewClose: {
+    paddingVertical: Theme.spacing.sm,
+    paddingHorizontal: Theme.spacing.lg,
   },
   previewImage: {
     flex: 1,
     width: "100%",
-    borderRadius: 18,
-  },
-
-  //date styles
-  datePickerButton: {
-    backgroundColor: "#050506",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#27272A",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  datePickerLabel: {
-    color: "#71717A",
-    fontSize: 11,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    marginBottom: 4,
-  },
-  datePickerValue: {
-    color: "#FFF",
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  datePickerIcon: {
-    fontSize: 22,
+    borderRadius: Theme.radius.lg,
   },
 });
