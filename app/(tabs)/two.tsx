@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Image,
@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from "react-native";
 import DateTimePicker, {
@@ -23,7 +24,11 @@ import { Theme } from "@/constants/Theme";
 import { FadeInView } from "@/components/ui/FadeInView";
 import { KPICard } from "@/components/ui/KPICard";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
-import { ScreenContainer, ScreenHeader, SectionHeader } from "@/components/ui/ScreenLayout";
+import {
+  ScreenContainer,
+  ScreenHeader,
+  SectionHeader,
+} from "@/components/ui/ScreenLayout";
 import { SegmentedChips } from "@/components/ui/SegmentedChips";
 import { StatusPill } from "@/components/ui/StatusPill";
 import {
@@ -33,6 +38,8 @@ import {
   getDocIconName,
   getUrgency,
 } from "@/components/ui/utils";
+import { DocumentCard } from "@/components/Documents/DocumentCard";
+import { DocumentEditModal } from "@/components/Documents/DocumentEditModal";
 
 const DOCUMENT_TYPES: DocumentRecord["type"][] = [
   "EmiratesID",
@@ -45,10 +52,7 @@ const DOCUMENT_TYPES: DocumentRecord["type"][] = [
   "Other",
 ];
 
-const URGENCY_BORDER: Record<
-  ReturnType<typeof getUrgency>,
-  string
-> = {
+const URGENCY_BORDER: Record<ReturnType<typeof getUrgency>, string> = {
   Safe: Theme.colors.success,
   Warning: Theme.colors.warning,
   Critical: Theme.colors.warning,
@@ -56,8 +60,9 @@ const URGENCY_BORDER: Record<
 };
 
 export default function VaultScreen() {
-  const { documents, addDocument, deleteDocument } = useApp();
-
+  const { updateDocument } = useApp();
+  const { documents, vehicles, addDocument, deleteDocument } = useApp();
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
   const [previewDoc, setPreviewDoc] = useState<DocumentRecord | null>(null);
   const [selectedType, setSelectedType] =
     useState<DocumentRecord["type"]>("EmiratesID");
@@ -72,10 +77,52 @@ export default function VaultScreen() {
     size?: number;
   } | null>(null);
 
+  const [editTitle, setEditTitle] = useState("");
+  const [editExpiryDate, setEditExpiryDate] = useState("");
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [documentEditMode, setDocumentEditMode] = useState<"edit" | "renew">(
+    "edit",
+  );
+  
+  const [editingDocument, setEditingDocument] = useState<DocumentRecord | null>(
+    null,
+  );
+
   const formatDateForStorage = (date: Date) => {
     return date.toISOString().split("T")[0];
   };
 
+  const handleEditDocument = (doc: DocumentRecord) => {
+    setDocumentEditMode("edit");
+    setEditingDocument(doc);
+    // setEditTitle(doc.title);
+    // setEditExpiryDate(doc.expiryDate);
+    // setIsEditModalVisible(true);
+  };
+
+  const handleRenewDocument = (doc: DocumentRecord) => {
+     setDocumentEditMode("edit");
+    setEditingDocument(doc);
+    // setEditTitle(doc.title);
+    // setEditExpiryDate(doc.expiryDate);
+    // setIsEditModalVisible(true);
+  };
+
+  const handleCloseEditModal = () => {
+    setIsEditModalVisible(false);
+    setEditingDocument(null);
+  };
+
+  const handleSaveDocumentEdit = async () => {
+    if (!editingDocument) return;
+
+    await updateDocument(editingDocument.id, {
+      title: editTitle.trim(),
+      expiryDate: editExpiryDate,
+    });
+
+    handleCloseEditModal();
+  };
   const handleDateChange = (event: DateTimePickerEvent, date?: Date) => {
     if (Platform.OS === "android") {
       setShowDatePicker(false);
@@ -157,11 +204,13 @@ export default function VaultScreen() {
       fileUri: pickedFile?.uri,
       mimeType: pickedFile?.mimeType,
       fileSize: pickedFile?.size,
+      vehicleId: selectedVehicleId || undefined,
     });
 
     setTitle("");
     setExpiryDate("");
     setPickedFile(null);
+    setSelectedVehicleId("");
 
     Alert.alert("Saved", "Document tracker secured in your local vault.");
   };
@@ -229,6 +278,12 @@ export default function VaultScreen() {
     ]);
   };
 
+  useEffect(() => {
+    if (!editingDocument) return;
+
+    setEditTitle(editingDocument.title);
+    setEditExpiryDate(editingDocument.expiryDate);
+  }, [editingDocument]);
   return (
     <ScreenContainer>
       <ScrollView
@@ -272,12 +327,65 @@ export default function VaultScreen() {
         <FadeInView delay={160}>
           <View style={styles.formCard}>
             <View style={styles.formHeader}>
-              <SectionHeader title="Add Document" subtitle="Local encrypted storage" />
-              <View style={styles.secureBadge}>
-                <FontAwesome6 name="lock" size={10} color={Theme.colors.success} />
+              <SectionHeader
+                title="Add Document"
+                subtitle="Local encrypted storage"
+              />
+              {/* <View style={styles.secureBadge}>
+                <FontAwesome6
+                  name="lock"
+                  size={10}
+                  color={Theme.colors.success}
+                />
                 <Text style={styles.secureBadgeText}>LOCAL ONLY</Text>
-              </View>
+              </View> */}
             </View>
+            <Text style={styles.fieldLabel}>Linked Vehicle</Text>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.vehicleLinkRibbon}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.vehicleLinkChip,
+                  selectedVehicleId === "" && styles.vehicleLinkChipActive,
+                ]}
+                onPress={() => setSelectedVehicleId("")}
+              >
+                <Text
+                  style={[
+                    styles.vehicleLinkText,
+                    selectedVehicleId === "" && styles.vehicleLinkTextActive,
+                  ]}
+                >
+                  None
+                </Text>
+              </TouchableOpacity>
+
+              {vehicles.map((vehicle) => (
+                <TouchableOpacity
+                  key={vehicle.id}
+                  style={[
+                    styles.vehicleLinkChip,
+                    selectedVehicleId === vehicle.id &&
+                      styles.vehicleLinkChipActive,
+                  ]}
+                  onPress={() => setSelectedVehicleId(vehicle.id)}
+                >
+                  <Text
+                    style={[
+                      styles.vehicleLinkText,
+                      selectedVehicleId === vehicle.id &&
+                        styles.vehicleLinkTextActive,
+                    ]}
+                  >
+                    {vehicle.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
             <SegmentedChips
               options={docTypeOptions}
@@ -375,143 +483,29 @@ export default function VaultScreen() {
               </Text>
             </View>
           ) : (
-            sortedDocuments.map((doc, index) => {
-              const days = getDaysRemaining(doc.expiryDate);
-              const urgency = getUrgency(days);
-              const borderColor = URGENCY_BORDER[urgency];
-
-              return (
-                <FadeInView key={doc.id} delay={280 + index * 40}>
-                  <View
-                    style={[
-                      styles.docCard,
-                      { borderLeftColor: borderColor },
-                    ]}
-                  >
-                    <View style={styles.docTop}>
-                      <View style={styles.docIconBox}>
-                        <FontAwesome6
-                          name={getDocIconName(doc.type)}
-                          size={18}
-                          color={Theme.colors.primaryGlow}
-                        />
-                      </View>
-                      <View style={styles.docInfo}>
-                        <Text style={styles.docTitle}>{doc.title}</Text>
-                        <Text style={styles.docType}>
-                          {formatDocType(doc.type)}
-                        </Text>
-                      </View>
-                      <StatusPill status={urgency} />
-                    </View>
-
-                    <View style={styles.expiryRow}>
-                      <View>
-                        <Text style={styles.expiryLabel}>Expires</Text>
-                        <Text style={styles.expiryDate}>{doc.expiryDate}</Text>
-                      </View>
-                      <View style={styles.daysBlock}>
-                        <Text style={styles.daysValue}>
-                          {days < 0 ? Math.abs(days) : days}
-                        </Text>
-                        <Text style={styles.daysLabel}>
-                          {days < 0 ? "days overdue" : "days left"}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.fileInfo}>
-                      <FontAwesome6
-                        name="paperclip"
-                        size={12}
-                        color={Theme.colors.textMuted}
-                      />
-                      <Text style={styles.fileText}>
-                        {doc.fileName
-                          ? `${doc.fileName} · ${formatFileSize(doc.fileSize)}`
-                          : "No file attached"}
-                      </Text>
-                    </View>
-
-                    <View style={styles.actions}>
-                      <Pressable
-                        style={[
-                          styles.actionBtn,
-                          !doc.fileUri && styles.actionDisabled,
-                        ]}
-                        onPress={() => handleViewDocument(doc)}
-                      >
-                        <FontAwesome6
-                          name="eye"
-                          size={12}
-                          color={Theme.colors.textSecondary}
-                        />
-                        <Text style={styles.actionText}>View</Text>
-                      </Pressable>
-                      <Pressable
-                        style={[
-                          styles.actionBtn,
-                          !doc.fileUri && styles.actionDisabled,
-                        ]}
-                        onPress={() => handleShareDocument(doc)}
-                      >
-                        <FontAwesome6
-                          name="share-nodes"
-                          size={12}
-                          color={Theme.colors.textSecondary}
-                        />
-                        <Text style={styles.actionText}>Share</Text>
-                      </Pressable>
-                      <Pressable
-                        style={[styles.actionBtn, styles.deleteBtn]}
-                        onPress={() => handleDeleteDocument(doc)}
-                      >
-                        <FontAwesome6
-                          name="trash"
-                          size={12}
-                          color={Theme.colors.danger}
-                        />
-                        <Text style={[styles.actionText, styles.deleteText]}>
-                          Delete
-                        </Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                </FadeInView>
-              );
-            })
+            sortedDocuments.map((doc, index) => (
+              <FadeInView key={doc.id} delay={280 + index * 40}>
+                <DocumentCard
+                  document={doc}
+                  onView={handleViewDocument}
+                  onShare={handleShareDocument}
+                  onDelete={handleDeleteDocument}
+                  onEdit={handleEditDocument}
+                  onRenew={handleRenewDocument}
+                />
+              </FadeInView>
+            ))
           )}
         </FadeInView>
       </ScrollView>
 
-      <Modal
-        visible={!!previewDoc}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPreviewDoc(null)}
-      >
-        <View style={styles.previewOverlay}>
-          <View style={styles.previewHeader}>
-            <View style={styles.previewHeaderText}>
-              <Text style={styles.previewTitle}>{previewDoc?.title}</Text>
-              <Text style={styles.previewSub}>{previewDoc?.fileName}</Text>
-            </View>
-            <PrimaryButton
-              label="Close"
-              onPress={() => setPreviewDoc(null)}
-              variant="ghost"
-              style={styles.previewClose}
-            />
-          </View>
-          {previewDoc?.fileUri && (
-            <Image
-              source={{ uri: previewDoc.fileUri }}
-              style={styles.previewImage}
-              resizeMode="contain"
-            />
-          )}
-        </View>
-      </Modal>
+      <DocumentEditModal
+        visible={!!editingDocument}
+        document={editingDocument}
+        mode={documentEditMode}
+        onClose={() => setEditingDocument(null)}
+        onSave={handleSaveDocumentEdit}
+      />
     </ScreenContainer>
   );
 }
@@ -810,5 +804,111 @@ const styles = StyleSheet.create({
     flex: 1,
     width: "100%",
     borderRadius: Theme.radius.lg,
+  },
+
+  //link vehicle
+  fieldLabel: {
+    color: "#94A3B8",
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+    marginBottom: 8,
+  },
+  vehicleLinkRibbon: {
+    marginBottom: 14,
+  },
+  vehicleLinkChip: {
+    backgroundColor: "#15161A",
+    borderWidth: 1,
+    borderColor: "#2A2D35",
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    marginRight: 8,
+  },
+  vehicleLinkChipActive: {
+    backgroundColor: "#3B82F6",
+    borderColor: "#60A5FA",
+  },
+  vehicleLinkText: {
+    color: "#94A3B8",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  vehicleLinkTextActive: {
+    color: "#F8FAFC",
+  },
+
+  // edit modal
+  editModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.72)",
+    justifyContent: "flex-end",
+  },
+
+  editModalCard: {
+    backgroundColor: Theme.colors.card,
+    borderTopLeftRadius: Theme.radius.xl,
+    borderTopRightRadius: Theme.radius.xl,
+    padding: Theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+
+  editModalTitle: {
+    color: Theme.colors.textPrimary,
+    fontSize: 20,
+    fontWeight: "900",
+    marginBottom: Theme.spacing.md,
+  },
+
+  editInput: {
+    backgroundColor: Theme.colors.surface,
+    borderRadius: Theme.radius.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    color: Theme.colors.textPrimary,
+    paddingHorizontal: Theme.spacing.md,
+    paddingVertical: Theme.spacing.md,
+    marginBottom: Theme.spacing.md,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+
+  editActions: {
+    flexDirection: "row",
+    gap: Theme.spacing.sm,
+    marginTop: Theme.spacing.sm,
+  },
+
+  editCancelBtn: {
+    flex: 1,
+    backgroundColor: Theme.colors.surface,
+    borderRadius: Theme.radius.lg,
+    paddingVertical: Theme.spacing.md,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+
+  editSaveBtn: {
+    flex: 1,
+    backgroundColor: Theme.colors.primary,
+    borderRadius: Theme.radius.lg,
+    paddingVertical: Theme.spacing.md,
+    alignItems: "center",
+  },
+
+  editCancelText: {
+    color: Theme.colors.textSecondary,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+
+  editSaveText: {
+    color: Theme.colors.textPrimary,
+    fontSize: 14,
+    fontWeight: "900",
   },
 });

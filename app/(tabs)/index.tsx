@@ -16,6 +16,7 @@ import { PremiumVehicleCard } from "@/components/ui/PremiumVehicleCard";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { ScreenContainer, SectionHeader } from "@/components/ui/ScreenLayout";
 import { SegmentedChips } from "@/components/ui/SegmentedChips";
+import { useRouter } from "expo-router";
 import {
   EMIRATES_LIST,
   computeComplianceScore,
@@ -36,7 +37,7 @@ export default function DashboardScreen() {
     clearParkingSession,
     startParkingSession,
   } = useApp();
-
+const router = useRouter();
   const [now, setNow] = useState(Date.now());
   const [label, setLabel] = useState("");
   const [selectedEmirate, setSelectedEmirate] =
@@ -154,13 +155,15 @@ export default function DashboardScreen() {
     );
   };
 
-  const handleViewVehicle = (vehicle: VehicleProfile) => {
-    Alert.alert(
-      vehicle.label,
-      `${formatEmirate(vehicle.emirate)}\nPlate: ${vehicle.plateCode} ${vehicle.plateNumber}`,
-    );
-  };
-
+  // const handleViewVehicle = (vehicle: VehicleProfile) => {
+  //   Alert.alert(
+  //     vehicle.label,
+  //     `${formatEmirate(vehicle.emirate)}\nPlate: ${vehicle.plateCode} ${vehicle.plateNumber}`,
+  //   );
+  // };
+const handleViewVehicle = (vehicle: VehicleProfile) => {
+  router.push(`/vehicle/${vehicle.id}`);
+};
   const handleDeleteVehicle = (vehicle: VehicleProfile) => {
     Alert.alert(
       "Remove Vehicle",
@@ -181,6 +184,7 @@ export default function DashboardScreen() {
     label: formatEmirate(em),
   }));
 
+  
   return (
     <ScreenContainer>
       <ScrollView
@@ -229,7 +233,9 @@ export default function DashboardScreen() {
               <FontAwesome6
                 name="bell"
                 size={14}
-                color={alertCount > 0 ? Theme.colors.warning : Theme.colors.textMuted}
+                color={
+                  alertCount > 0 ? Theme.colors.warning : Theme.colors.textMuted
+                }
               />
               <Text
                 style={[
@@ -262,13 +268,17 @@ export default function DashboardScreen() {
                   >
                     {ticketInfo.expired ? "Session Expired" : "Active Parking"}
                   </Text>
-                  <Text style={styles.heroVehicle}>{activeTicket.vehicleLabel}</Text>
+                  <Text style={styles.heroVehicle}>
+                    {activeTicket.vehicleLabel}
+                  </Text>
                   <Text style={styles.heroMeta}>
                     {activeTicket.parkingEmirate} · {activeTicket.plateDetails}
                   </Text>
                 </View>
                 <View style={styles.complianceRing}>
-                  <Text style={[styles.complianceValue, { color: complianceColor }]}>
+                  <Text
+                    style={[styles.complianceValue, { color: complianceColor }]}
+                  >
                     {complianceScore}%
                   </Text>
                   <Text style={styles.complianceLabel}>Score</Text>
@@ -305,7 +315,8 @@ export default function DashboardScreen() {
               </View>
               <Text style={styles.emptyHeroTitle}>No Active Parking</Text>
               <Text style={styles.emptyHeroSub}>
-                Start a session from the Parking tab or use the test timer below.
+                Start a session from the Parking tab or use the test timer
+                below.
               </Text>
               <View style={styles.complianceBar}>
                 <Text style={styles.complianceBarLabel}>Compliance Score</Text>
@@ -320,7 +331,12 @@ export default function DashboardScreen() {
                     ]}
                   />
                 </View>
-                <Text style={[styles.complianceBarValue, { color: complianceColor }]}>
+                <Text
+                  style={[
+                    styles.complianceBarValue,
+                    { color: complianceColor },
+                  ]}
+                >
                   {complianceScore}%
                 </Text>
               </View>
@@ -407,23 +423,36 @@ export default function DashboardScreen() {
               </Text>
             </View>
           ) : (
-            vehicles.map((vehicle) => (
-              <PremiumVehicleCard
-                key={vehicle.id}
-                label={vehicle.label}
-                emirate={vehicle.emirate}
-                plateCode={vehicle.plateCode}
-                plateNumber={vehicle.plateNumber}
-                vehicleType={
-                  vehicle.label.toLowerCase().includes("patrol") ||
-                  vehicle.label.toLowerCase().includes("suv")
-                    ? "suv"
-                    : "sedan"
-                }
-                onView={() => handleViewVehicle(vehicle)}
-                onDelete={() => handleDeleteVehicle(vehicle)}
-              />
-            ))
+            vehicles.map((vehicle) => {
+              const linkedDocs = documents
+                .filter((doc) => doc.vehicleId === vehicle.id)
+                .map((doc) => ({
+                  id: doc.id,
+                  title: doc.title || formatDocType(doc.type),
+                  type: formatDocType(doc.type),
+                  daysRemaining: getDaysRemaining(doc.expiryDate),
+                }))
+                .sort((a, b) => a.daysRemaining - b.daysRemaining);
+
+              return (
+                <PremiumVehicleCard
+                  key={vehicle.id}
+                  label={vehicle.label}
+                  emirate={vehicle.emirate}
+                  plateCode={vehicle.plateCode}
+                  plateNumber={vehicle.plateNumber}
+                  linkedDocuments={linkedDocs}
+                  vehicleType={
+                    vehicle.label.toLowerCase().includes("patrol") ||
+                    vehicle.label.toLowerCase().includes("suv")
+                      ? "suv"
+                      : "sedan"
+                  }
+                  onView={() => handleViewVehicle(vehicle)}
+                  onDelete={() => handleDeleteVehicle(vehicle)}
+                />
+              );
+            })  
           )}
         </FadeInView>
 
@@ -821,4 +850,6 @@ const styles = StyleSheet.create({
   plateNumberInput: {
     flex: 0.65,
   },
+
+ 
 });

@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from "react-native";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
@@ -19,7 +20,11 @@ import { Theme } from "@/constants/Theme";
 import { FadeInView } from "@/components/ui/FadeInView";
 import { PremiumVehicleCard } from "@/components/ui/PremiumVehicleCard";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
-import { ScreenContainer, ScreenHeader, SectionHeader } from "@/components/ui/ScreenLayout";
+import {
+  ScreenContainer,
+  ScreenHeader,
+  SectionHeader,
+} from "@/components/ui/ScreenLayout";
 import { formatEmirate } from "@/components/ui/utils";
 
 const DURATION_OPTIONS = [
@@ -28,52 +33,124 @@ const DURATION_OPTIONS = [
   { value: 3, label: "3h" },
   { value: 4, label: "4h" },
 ];
+const PARKING_EMIRATES = [
+  "Dubai",
+  "AbuDhabi",
+  "Sharjah",
+  "Ajman",
+  "RasAlKhaimah",
+  "UmmAlQuwain",
+  "Fujairah",
+] as const;
 
+const ZONE_REQUIRED_EMIRATES = [
+  "Dubai",
+  "RasAlKhaimah",
+  "UmmAlQuwain",
+  "Fujairah",
+];
+
+const PARKING_RULES = {
+  Dubai: {
+    supportsSms: true,
+    requiresZone: true,
+    requiresDuration: true,
+    requiresBayType: false,
+    shortcode: "7275",
+  },
+  Sharjah: {
+    supportsSms: true,
+    requiresZone: false,
+    requiresDuration: true,
+    requiresBayType: false,
+    shortcode: "5566",
+  },
+  Ajman: {
+    supportsSms: true,
+    requiresZone: false,
+    requiresDuration: false,
+    requiresBayType: false,
+    shortcode: "5155",
+  },
+  RasAlKhaimah: {
+    supportsSms: true,
+    requiresZone: false,
+    requiresDuration: true,
+    requiresBayType: false,
+    shortcode: "RAK_CODE_HERE",
+  },
+  AbuDhabi: {
+    supportsSms: true,
+    requiresZone: false,
+    requiresDuration: true,
+    requiresBayType: true,
+    shortcode: "3009",
+  },
+  UmmAlQuwain: {
+    supportsSms: false,
+    requiresZone: false,
+    requiresDuration: false,
+    requiresBayType: false,
+    shortcode: null,
+  },
+  Fujairah: {
+    supportsSms: false,
+    requiresZone: false,
+    requiresDuration: false,
+    requiresBayType: false,
+    shortcode: null,
+  },
+} as const;
+const requiresZoneCode = (emirate?: string) => {
+  return !!emirate && ZONE_REQUIRED_EMIRATES.includes(emirate);
+};
 export default function ParkingScreen() {
   const { vehicles, activeTicket, startParkingSession } = useApp();
 
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
+  const [selectedParkingEmirate, setSelectedParkingEmirate] =
+    useState<(typeof PARKING_EMIRATES)[number]>("Dubai");
+
+  const [isPremiumAbuDhabi, setIsPremiumAbuDhabi] = useState<boolean>(false);
   const [zoneCode, setZoneCode] = useState<string>("");
   const [duration, setDuration] = useState<number>(1);
-  const [isPremiumAbuDhabi, setIsPremiumAbuDhabi] = useState<boolean>(false);
+
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [detectedEmirate, setDetectedEmirate] = useState<string | null>(null);
 
   const activeVehicle = vehicles.find((v) => v.id === selectedVehicleId);
 
-  const currentParkingLocation =
-    (detectedEmirate as ReturnType<typeof identifyEmirateFromRegion>) ||
-    activeVehicle?.emirate;
+  const currentParkingLocation = selectedParkingEmirate;
+  const parkingRule = PARKING_RULES[currentParkingLocation];
 
-  const smsPreview = useMemo(() => {
-    if (!activeVehicle || !currentParkingLocation) return null;
+  const needsZoneInput = parkingRule.requiresZone;
+  const needsDurationInput = parkingRule.requiresDuration;
+  const needsBayTypeInput = parkingRule.requiresBayType;
+  const smsSupported = parkingRule.supportsSms;
 
-    const needsZone = ["Dubai", "RasAlKhaimah", "UmmAlQuwain", "Fujairah"].includes(
-      activeVehicle.emirate,
-    );
-    if (needsZone && !zoneCode.trim()) return null;
+const smsPreview = useMemo(() => {
+  if (!activeVehicle) return null;
 
-    try {
-      return generateParkingSMS({
-        plateEmirate: activeVehicle.emirate,
-        parkingEmirate: currentParkingLocation,
-        plateCode: activeVehicle.plateCode,
-        plateNumber: activeVehicle.plateNumber,
-        zoneCode: zoneCode,
-        durationInHours: duration,
-        isPremiumAbuDhabi: isPremiumAbuDhabi,
-      });
-    } catch {
-      return null;
-    }
-  }, [
-    activeVehicle,
-    currentParkingLocation,
-    zoneCode,
-    duration,
-    isPremiumAbuDhabi,
-  ]);
-
+  try {
+    return generateParkingSMS({
+      plateEmirate: activeVehicle.emirate,
+      parkingEmirate: currentParkingLocation,
+      plateCode: activeVehicle.plateCode,
+      plateNumber: activeVehicle.plateNumber,
+      zoneCode: zoneCode.trim(),
+      durationInHours: duration,
+      isPremiumAbuDhabi,
+    });
+  } catch {
+    return null;
+  }
+}, [
+  activeVehicle,
+  currentParkingLocation,
+  zoneCode,
+  duration,
+  isPremiumAbuDhabi,
+]);
   const handleAutoDetectEmirate = async () => {
     setIsLocating(true);
     try {
@@ -104,6 +181,9 @@ export default function ParkingScreen() {
 
         if (targetEmirate) {
           setDetectedEmirate(targetEmirate);
+          setSelectedParkingEmirate(
+            targetEmirate as (typeof PARKING_EMIRATES)[number],
+          );
           Alert.alert(
             "Location Locked",
             `Detected current zone position: ${targetEmirate}`,
@@ -140,68 +220,70 @@ export default function ParkingScreen() {
       return;
     }
 
-    const needsZone = [
-      "Dubai",
-      "RasAlKhaimah",
-      "UmmAlQuwain",
-      "Fujairah",
-    ].includes(activeVehicle.emirate);
-    if (needsZone && !zoneCode.trim()) {
-      Alert.alert(
-        "Zone Required",
-        `${activeVehicle.emirate} municipal databases require an accurate parking zone locator code.`,
-      );
-      return;
-    }
+  const parkingLocation = currentParkingLocation;
+  const parkingRule = PARKING_RULES[parkingLocation];
 
-    const parkingLocation =
-      (detectedEmirate as ReturnType<typeof identifyEmirateFromRegion>) ||
-      activeVehicle.emirate;
+  if (!parkingRule.supportsSms) {
+    Alert.alert(
+      "SMS Parking Not Supported",
+      `${formatEmirate(parkingLocation)} does not currently support SMS parking through ZoneGard. Use the local parking app, kiosk, or meter.`,
+    );
+    return;
+  }
 
-    try {
-      const { recipient, body } = generateParkingSMS({
-        plateEmirate: activeVehicle.emirate,
+  if (parkingRule.requiresZone && !zoneCode.trim()) {
+    Alert.alert(
+      "Zone Required",
+      `${formatEmirate(parkingLocation)} parking requires an accurate zone code.`,
+    );
+    return;
+  }
+
+  try {
+    const { recipient, body } = generateParkingSMS({
+      plateEmirate: activeVehicle.emirate,
+      parkingEmirate: parkingLocation,
+      plateCode: activeVehicle.plateCode,
+      plateNumber: activeVehicle.plateNumber,
+      zoneCode: zoneCode.trim(),
+      durationInHours: duration,
+      isPremiumAbuDhabi,
+    });
+
+    const smsUrl = `sms:${recipient}?body=${encodeURIComponent(body)}`;
+    const canOpen = await Linking.canOpenURL(smsUrl);
+
+    if (canOpen) {
+      await Linking.openURL(smsUrl);
+
+      const durationInMilliseconds = parkingRule.requiresDuration
+        ? duration * 60 * 60 * 1000
+        : 60 * 60 * 1000;
+
+      const expiryTime = Date.now() + durationInMilliseconds;
+
+      await startParkingSession({
+        vehicleLabel: activeVehicle.label,
+        plateDetails: `${activeVehicle.plateCode} ${activeVehicle.plateNumber}`,
         parkingEmirate: parkingLocation,
-        plateCode: activeVehicle.plateCode,
-        plateNumber: activeVehicle.plateNumber,
-        zoneCode: zoneCode,
-        durationInHours: duration,
-        isPremiumAbuDhabi: isPremiumAbuDhabi,
+        expiryTimestamp: expiryTime,
       });
-
-      const smsUrl = `sms:${recipient}?body=${encodeURIComponent(body)}`;
-      const canOpen = await Linking.canOpenURL(smsUrl);
-
-      if (canOpen) {
-        await Linking.openURL(smsUrl);
-
-        const durationInMilliseconds = duration * 60 * 60 * 1000;
-        const expiryTime = Date.now() + durationInMilliseconds;
-
-        await startParkingSession({
-          vehicleLabel: activeVehicle.label,
-          plateDetails: `${activeVehicle.plateCode} ${activeVehicle.plateNumber}`,
-          parkingEmirate: parkingLocation,
-          expiryTimestamp: expiryTime,
-        });
-      } else {
-        Alert.alert(
-          "Device Direct Error",
-          `System failed to deploy communications channel to target: ${recipient}`,
-        );
-      }
-    } catch (err) {
-      console.error(err);
+    } else {
       Alert.alert(
-        "Formatting Execution Failure",
-        "An error occurred while compiling your ticket configuration profile.",
+        "Device Direct Error",
+        `System failed to open SMS channel to: ${recipient}`,
       );
     }
+  } catch (err) {
+    console.error(err);
+    Alert.alert(
+      "Formatting Execution Failure",
+      "An error occurred while compiling your ticket configuration profile.",
+    );
+  }
   };
 
-  const needsZoneInput =
-    activeVehicle &&
-    !["Sharjah", "Ajman"].includes(activeVehicle.emirate);
+  // const needsZoneInput = requiresZoneCode(currentParkingLocation);
 
   return (
     <ScreenContainer>
@@ -224,7 +306,9 @@ export default function ParkingScreen() {
               <FontAwesome6
                 name="location-crosshairs"
                 size={22}
-                color={isLocating ? Theme.colors.primaryGlow : Theme.colors.primary}
+                color={
+                  isLocating ? Theme.colors.primaryGlow : Theme.colors.primary
+                }
               />
               {isLocating && <View style={styles.scanPulse} />}
             </View>
@@ -289,6 +373,41 @@ export default function ParkingScreen() {
           )}
         </FadeInView>
 
+        {/* select emirate */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Parking Emirate</Text>
+          <Text style={styles.sectionSubtitle}>
+            Select where the car is parked. This controls SMS format and zone
+            rules.
+          </Text>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {PARKING_EMIRATES.map((emirate) => {
+              const active = selectedParkingEmirate === emirate;
+
+              return (
+                <TouchableOpacity
+                  key={emirate}
+                  style={[
+                    styles.emirateChip,
+                    active && styles.emirateChipActive,
+                  ]}
+                  onPress={() => setSelectedParkingEmirate(emirate)}
+                >
+                  <Text
+                    style={[
+                      styles.emirateChipText,
+                      active && styles.emirateChipTextActive,
+                    ]}
+                  >
+                    {formatEmirate(emirate)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
         {activeVehicle && (
           <>
             <FadeInView delay={240}>
@@ -318,36 +437,59 @@ export default function ParkingScreen() {
                       color={Theme.colors.primaryGlow}
                     />
                     <Text style={styles.infoText}>
-                      {activeVehicle.emirate} uses flat-rate messaging. No zone
-                      code needed.
+                      {currentParkingLocation
+                        ? formatEmirate(currentParkingLocation)
+                        : "This emirate"}{" "}
+                      uses flat-rate messaging.
                     </Text>
                   </View>
                 )}
               </View>
             </FadeInView>
 
-            {activeVehicle.emirate === "AbuDhabi" && (
-              <FadeInView delay={300}>
-                <View style={styles.premiumToggle}>
-                  <View>
-                    <Text style={styles.premiumLabel}>Premium Curb Zone</Text>
-                    <Text style={styles.premiumSub}>
-                      White & Turquoise parking
-                    </Text>
-                  </View>
-                  <PrimaryButton
-                    label={isPremiumAbuDhabi ? "ON" : "OFF"}
-                    onPress={() => setIsPremiumAbuDhabi(!isPremiumAbuDhabi)}
-                    variant={isPremiumAbuDhabi ? "primary" : "ghost"}
-                    style={styles.toggleBtn}
-                  />
+            {needsBayTypeInput && (
+              <View style={styles.sectionCard}>
+                <Text style={styles.sectionTitle}>Abu Dhabi Bay Type</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Select the curbside parking type before generating the SMS.
+                </Text>
+
+                <View style={styles.bayTypeGrid}>
+                  <TouchableOpacity
+                    style={[
+                      styles.bayTypeCard,
+                      !isPremiumAbuDhabi && styles.bayTypeCardActive,
+                    ]}
+                    onPress={() => setIsPremiumAbuDhabi(false)}
+                  >
+                    <Text style={styles.bayTypeCode}>S</Text>
+                    <Text style={styles.bayTypeTitle}>Standard</Text>
+                    <Text style={styles.bayTypeMeta}>AED 2/hr • Max 24h</Text>
+                    <Text style={styles.bayTypePaint}>Turquoise + Black</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.bayTypeCard,
+                      isPremiumAbuDhabi && styles.bayTypeCardActive,
+                    ]}
+                    onPress={() => setIsPremiumAbuDhabi(true)}
+                  >
+                    <Text style={styles.bayTypeCode}>P</Text>
+                    <Text style={styles.bayTypeTitle}>Premium</Text>
+                    <Text style={styles.bayTypeMeta}>AED 3/hr • Max 4h</Text>
+                    <Text style={styles.bayTypePaint}>Turquoise + White</Text>
+                  </TouchableOpacity>
                 </View>
-              </FadeInView>
+              </View>
             )}
 
             <FadeInView delay={360}>
               <View style={styles.durationCard}>
-                <SectionHeader title="Duration" subtitle="Ticket length in hours" />
+                <SectionHeader
+                  title="Duration"
+                  subtitle="Ticket length in hours"
+                />
                 <View style={styles.durationRow}>
                   {DURATION_OPTIONS.map((opt) => (
                     <PrimaryButton
@@ -368,13 +510,29 @@ export default function ParkingScreen() {
                   <SectionHeader title="SMS Preview" subtitle="Ready to send" />
                   <View style={styles.previewRow}>
                     <Text style={styles.previewLabel}>To</Text>
-                    <Text style={styles.previewValue}>{smsPreview.recipient}</Text>
+                    <Text style={styles.previewValue}>
+                      {smsPreview.recipient}
+                    </Text>
                   </View>
                   <View style={styles.previewBody}>
-                    <Text style={styles.previewBodyText}>{smsPreview.body}</Text>
+                    <Text style={styles.previewBodyText}>
+                      {smsPreview.body}
+                    </Text>
                   </View>
                 </View>
               </FadeInView>
+            )}
+            {!smsSupported && (
+              <View style={styles.unsupportedCard}>
+                <Text style={styles.unsupportedTitle}>
+                  SMS Parking Not Supported
+                </Text>
+                <Text style={styles.unsupportedText}>
+                  {formatEmirate(currentParkingLocation)} does not currently
+                  support SMS parking through ZoneGard. Use the local smart
+                  parking app, kiosk, or on-street meter.
+                </Text>
+              </View>
             )}
 
             <FadeInView delay={480}>
@@ -597,5 +755,121 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: "center",
     marginTop: Theme.spacing.md,
+  },
+
+  // emirate selection
+  sectionCard: {
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.xl,
+    padding: Theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    marginBottom: Theme.spacing.md,
+    ...Theme.shadow.card,
+  },
+
+  sectionTitle: {
+    color: Theme.colors.textPrimary,
+    fontSize: 16,
+    fontWeight: "900",
+    marginBottom: 4,
+  },
+
+  sectionSubtitle: {
+    color: Theme.colors.textSecondary,
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 18,
+    marginBottom: Theme.spacing.md,
+  },
+
+  emirateChip: {
+    backgroundColor: Theme.colors.surface,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: Theme.radius.full,
+    marginRight: 8,
+  },
+
+  emirateChipActive: {
+    backgroundColor: Theme.colors.primary,
+    borderColor: Theme.colors.primaryGlow,
+    ...Theme.shadow.glow,
+  },
+
+  emirateChipText: {
+    color: Theme.colors.textSecondary,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  emirateChipTextActive: {
+    color: Theme.colors.textPrimary,
+  },
+  // new style after refractor.
+
+  bayTypeGrid: {
+    flexDirection: "row",
+    gap: Theme.spacing.sm,
+  },
+  bayTypeCard: {
+    flex: 1,
+    backgroundColor: Theme.colors.surface,
+    borderRadius: Theme.radius.lg,
+    padding: Theme.spacing.md,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  bayTypeCardActive: {
+    borderColor: Theme.colors.primary,
+    backgroundColor: Theme.colors.primaryMuted,
+  },
+  bayTypeCode: {
+    color: Theme.colors.primaryGlow,
+    fontSize: 24,
+    fontWeight: "900",
+  },
+  bayTypeTitle: {
+    color: Theme.colors.textPrimary,
+    fontSize: 14,
+    fontWeight: "900",
+    marginTop: 6,
+  },
+  bayTypeMeta: {
+    color: Theme.colors.textSecondary,
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 4,
+  },
+  bayTypePaint: {
+    color: Theme.colors.textMuted,
+    fontSize: 10,
+    fontWeight: "700",
+    marginTop: 6,
+  },
+  unsupportedCard: {
+    backgroundColor: Theme.colors.warningMuted,
+    borderRadius: Theme.radius.xl,
+    padding: Theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.warning,
+    marginBottom: Theme.spacing.md,
+  },
+  unsupportedTitle: {
+    color: Theme.colors.textPrimary,
+    fontSize: 15,
+    fontWeight: "900",
+    marginBottom: 6,
+  },
+  unsupportedText: {
+    color: Theme.colors.textSecondary,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 19,
+  },
+  generateButtonDisabled: {
+    opacity: 0.45,
   },
 });

@@ -32,6 +32,12 @@ type PremiumVehicleCardProps = {
   onView?: () => void;
   onDelete?: () => void;
   style?: ViewStyle;
+  linkedDocuments?: {
+    id: string;
+    title: string;
+    type: string;
+    daysRemaining: number;
+  }[];
 };
 
 export function PremiumVehicleCard({
@@ -46,12 +52,15 @@ export function PremiumVehicleCard({
   onView,
   onDelete,
   style,
+  linkedDocuments,
 }: PremiumVehicleCardProps) {
   const iconName = VEHICLE_ICONS[vehicleType];
 
   const content = (
     <>
-      <View style={[styles.illustration, selected && styles.illustrationActive]}>
+      <View
+        style={[styles.illustration, selected && styles.illustrationActive]}
+      >
         <View style={styles.glowOrb} />
         <FontAwesome6
           name={iconName}
@@ -76,18 +85,54 @@ export function PremiumVehicleCard({
           <Text style={styles.badgeText}>Registered</Text>
         </View>
       </View>
+      <View style={styles.linkedDocsPanel}>
+        <Text style={styles.linkedDocsTitle}>
+          Linked Documents ({linkedDocuments?.length || 0})
+        </Text>
+
+        {!linkedDocuments || linkedDocuments.length === 0 ? (
+          <Text style={styles.linkedDocsEmpty}>No linked documents yet</Text>
+        ) : (
+          linkedDocuments.slice(0, 2).map((doc) => (
+            <View key={doc.id} style={styles.linkedDocRow}>
+              <Text style={styles.linkedDocName}>{doc.title}</Text>
+              <Text
+                style={[
+                  styles.linkedDocDays,
+                  doc.daysRemaining <= 30 && styles.linkedDocDanger,
+                ]}
+              >
+                {doc.daysRemaining < 0
+                  ? `${Math.abs(doc.daysRemaining)}d overdue`
+                  : `${doc.daysRemaining}d left`}
+              </Text>
+            </View>
+          ))
+        )}
+      </View>
 
       {!compact && (onView || onDelete) && (
         <View style={styles.actions}>
           {onView && (
             <Pressable style={styles.actionBtn} onPress={onView}>
-              <FontAwesome6 name="eye" size={12} color={Theme.colors.primaryGlow} />
+              <FontAwesome6
+                name="eye"
+                size={12}
+                color={Theme.colors.primaryGlow}
+              />
               <Text style={styles.actionText}>View</Text>
             </Pressable>
           )}
           {onDelete && (
-            <Pressable style={[styles.actionBtn, styles.deleteBtn]} onPress={onDelete}>
-              <FontAwesome6 name="trash" size={12} color={Theme.colors.danger} />
+            <Pressable
+              style={[styles.actionBtn, styles.deleteBtn]}
+              onPress={onDelete}
+            >
+              <FontAwesome6
+                name="trash"
+                size={12}
+                color={Theme.colors.danger}
+              />
               <Text style={[styles.actionText, styles.deleteText]}>Delete</Text>
             </Pressable>
           )}
@@ -260,6 +305,48 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   deleteText: {
+    color: Theme.colors.danger,
+  },
+  //linked doc style
+  linkedDocsPanel: {
+    backgroundColor: Theme.colors.background,
+    borderRadius: Theme.radius.md,
+    padding: Theme.spacing.md,
+    marginTop: Theme.spacing.md,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  linkedDocsTitle: {
+    color: Theme.colors.textSecondary,
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    marginBottom: 8,
+  },
+  linkedDocsEmpty: {
+    color: Theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  linkedDocRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 6,
+  },
+  linkedDocName: {
+    color: Theme.colors.textPrimary,
+    fontSize: 13,
+    fontWeight: "800",
+    flex: 1,
+    marginRight: 8,
+  },
+  linkedDocDays: {
+    color: Theme.colors.warning,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  linkedDocDanger: {
     color: Theme.colors.danger,
   },
 });

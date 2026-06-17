@@ -21,6 +21,15 @@ export interface ParkingPayload {
   durationInHours: number;
   isPremiumAbuDhabi?: boolean;
 }
+const EMIRATE_PREFIX: Record<ParkingPayload["plateEmirate"], string> = {
+  Dubai: "DXB",
+  AbuDhabi: "AUH",
+  Sharjah: "SHJ",
+  Ajman: "AJM",
+  RasAlKhaimah: "RAK",
+  UmmAlQuwain: "UAQ",
+  Fujairah: "FUJ",
+};
 
 export function generateParkingSMS(payload: ParkingPayload): {
   recipient: string;
@@ -39,103 +48,73 @@ export function generateParkingSMS(payload: ParkingPayload): {
   const cleanPlateCode = plateCode.trim().toUpperCase();
   const cleanPlateNumber = plateNumber.trim();
   const cleanZone = zoneCode ? zoneCode.trim().toUpperCase() : "";
-  const hours = Math.max(1, Math.min(24, durationInHours));
+  const prefix = EMIRATE_PREFIX[plateEmirate];
 
-  // Step A: System shortcode is strictly dictated by CURRENT PARKING LOCATION
-  let recipient = "7275"; // Default to unified framework
-  if (parkingEmirate === "AbuDhabi") recipient = "3009";
-  if (parkingEmirate === "Sharjah") recipient = "5566";
-  if (parkingEmirate === "Ajman") recipient = "5155";
-
-  // Step B: Define how each local municipality network expects foreign or local plates
   switch (parkingEmirate) {
-    case "Dubai":
-      // Dubai format changes if the plate is external or native
+    case "Dubai": {
+      if (!cleanZone) {
+        throw new Error("Dubai parking requires a zone code.");
+      }
+
+      const hours = Math.max(1, Math.min(24, durationInHours));
+
       if (plateEmirate === "Dubai") {
         return {
-          recipient,
+          recipient: "7275",
           body: `${cleanPlateCode}${cleanPlateNumber} ${cleanZone} ${hours}`,
-        };
-      } else {
-        // Syntax for foreign plates in Dubai: [EmirateCode拼写] [PlateCode] [PlateNumber] [Zone] [Duration]
-        const emirateCodesMap: Record<string, string> = {
-          AbuDhabi: "AUH",
-          Sharjah: "SHJ",
-          Ajman: "AJM",
-          RasAlKhaimah: "RAK",
-          UmmAlQuwain: "UAQ",
-          Fujairah: "FUJ",
-        };
-        return {
-          recipient,
-          body: `${emirateCodesMap[plateEmirate]} ${cleanPlateCode} ${cleanPlateNumber} ${cleanZone} ${hours}`,
         };
       }
 
-    case "AbuDhabi":
+      return {
+        recipient: "7275",
+        body: `${prefix} ${cleanPlateCode} ${cleanPlateNumber} ${cleanZone} ${hours}`,
+      };
+    }
+
+    case "AbuDhabi": {
       const typeMarker = isPremiumAbuDhabi ? "P" : "S";
-      // Abu Dhabi requires a localized regional abbreviation prefix system
-      const auhPrefixes: Record<string, string> = {
-        Dubai: "DXB",
-        AbuDhabi: "AUH",
-        Sharjah: "SHJ",
-        Ajman: "AJM",
-        RasAlKhaimah: "RAK",
-        UmmAlQuwain: "UAQ",
-        Fujairah: "FUJ",
-      };
-      return {
-        recipient,
-        body: `${auhPrefixes[plateEmirate]}${cleanPlateCode} ${cleanPlateNumber} ${typeMarker} ${hours}`,
-      };
+      const maxHours = isPremiumAbuDhabi ? 4 : 24;
+      const hours = Math.max(1, Math.min(maxHours, durationInHours));
 
-    case "Sharjah":
-      // Sharjah expects the plate source name as a prefix descriptor block
-      const shjPrefixes: Record<string, string> = {
-        Dubai: "DXB",
-        AbuDhabi: "AUH",
-        Sharjah: "SHJ",
-        Ajman: "AJM",
-        RasAlKhaimah: "RAK",
-        UmmAlQuwain: "UAQ",
-        Fujairah: "FUJ",
-      };
       return {
-        recipient,
-        body: `${shjPrefixes[plateEmirate]} ${cleanPlateCode} ${cleanPlateNumber} ${hours}`,
+        recipient: "3009",
+        body: `${prefix}${cleanPlateCode} ${cleanPlateNumber} ${typeMarker} ${hours}`,
       };
+    }
 
-    case "Ajman":
-      // Ajman system accepts foreign registrations with a spacing code block
-      const ajmPrefixes: Record<string, string> = {
-        Dubai: "DXB",
-        AbuDhabi: "AUH",
-        Sharjah: "SHJ",
-        Ajman: "AJM",
-        RasAlKhaimah: "RAK",
-        UmmAlQuwain: "UAQ",
-        Fujairah: "FUJ",
-      };
-      return {
-        recipient,
-        body: `${ajmPrefixes[plateEmirate]} ${cleanPlateCode} ${cleanPlateNumber} ${hours}`,
-      };
+    case "Sharjah": {
+      const hours = Math.max(1, Math.min(24, durationInHours));
 
-    // Northern Emirates (RAK, UAQ, FUJ) route completely through the universal 7275 portal
-    default:
-      const northernPrefixes: Record<string, string> = {
-        Dubai: "DXB",
-        AbuDhabi: "AUH",
-        Sharjah: "SHJ",
-        Ajman: "AJM",
-        RasAlKhaimah: "RAK",
-        UmmAlQuwain: "UAQ",
-        Fujairah: "FUJ",
-      };
       return {
-        recipient,
-        body: `${northernPrefixes[plateEmirate]} ${cleanPlateCode} ${cleanPlateNumber} ${cleanZone} ${hours}`,
+        recipient: "5566",
+        body: `${prefix} ${cleanPlateCode} ${cleanPlateNumber} ${hours}`,
       };
+    }
+
+    case "Ajman": {
+      return {
+        recipient: "5155",
+        body: `${prefix} ${cleanPlateCode} ${cleanPlateNumber}`,
+      };
+    }
+
+    case "RasAlKhaimah": {
+      const hours = Math.max(1, Math.min(24, durationInHours));
+
+      return {
+        recipient: "RAK_CODE_HERE",
+        body: `${prefix} ${cleanPlateCode} ${cleanPlateNumber} ${hours}`,
+      };
+    }
+
+    case "UmmAlQuwain":
+    case "Fujairah": {
+      throw new Error(`${parkingEmirate} does not support SMS parking.`);
+    }
+
+    default: {
+      throw new Error("Unsupported parking emirate.");
+    }
   }
 }
 /**

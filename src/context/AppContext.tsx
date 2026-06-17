@@ -39,6 +39,7 @@ export interface DocumentRecord {
   fileUri?: string;
   mimeType?: string;
   fileSize?: number;
+  vehicleId?: string;
 
   createdAt: number;
 }
@@ -63,6 +64,15 @@ interface AppContextType {
   deleteDocument: (id: string) => Promise<void>;
   startParkingSession: (ticket: Omit<ActiveTicket, "id">) => Promise<void>; // <── Add this line
   clearParkingSession: () => Promise<void>; // <── Add this line
+  updateVehicle: (
+    id: string,
+    payload: Partial<Omit<VehicleProfile, "id">>,
+  ) => Promise<void>;
+
+  updateDocument: (
+    id: string,
+    payload: Partial<Omit<DocumentRecord, "id" | "createdAt">>,
+  ) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -74,16 +84,16 @@ const TICKET_STORAGE_KEY = "@zonegard_active_ticket";
 const TICKET_NOTIFICATION_KEY = "@zonegard_ticket_notification_id";
 
 
-const requestNotificationPermission = async () => {
-  const existing = await Notifications.getPermissionsAsync();
+// const requestNotificationPermission = async () => {
+//   const existing = await Notifications.getPermissionsAsync();
 
-  if (existing.status === "granted") {
-    return true;
-  }
+//   if (existing.status === "granted") {
+//     return true;
+//   }
 
-  const requested = await Notifications.requestPermissionsAsync();
-  return requested.status === "granted";
-};
+//   const requested = await Notifications.requestPermissionsAsync();
+//   return requested.status === "granted";
+// };
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [vehicles, setVehicles] = useState<VehicleProfile[]>([]);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
@@ -125,65 +135,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   // D. Add the worker dispatcher functions to start and clear active countdown values
- const startParkingSession = async (newTicket: Omit<ActiveTicket, "id">) => {
-   try {
-     const completeTicket: ActiveTicket = {
-       ...newTicket,
-       id: Date.now().toString(),
-     };
+  const startParkingSession = async (newTicket: Omit<ActiveTicket, "id">) => {
+    try {
+      const completeTicket: ActiveTicket = {
+        ...newTicket,
+        id: Date.now().toString(),
+      };
 
-     const oldNotificationId = await AsyncStorage.getItem(
-       TICKET_NOTIFICATION_KEY,
-     );
+      //  const oldNotificationId = await AsyncStorage.getItem(
+      //    TICKET_NOTIFICATION_KEY,
+      //  );
 
-     if (oldNotificationId) {
-       await Notifications.cancelScheduledNotificationAsync(oldNotificationId);
-       await AsyncStorage.removeItem(TICKET_NOTIFICATION_KEY);
-     }
+      //  if (oldNotificationId) {
+      //    await Notifications.cancelScheduledNotificationAsync(oldNotificationId);
+      //    await AsyncStorage.removeItem(TICKET_NOTIFICATION_KEY);
+      //  }
 
-    //  const hasPermission = await requestNotificationPermission();
+      //  const hasPermission = await requestNotificationPermission();
 
-    //  if (hasPermission) {
-    // //    const triggerTime = completeTicket.expiryTimestamp - 10 * 60 * 1000;
-    // const triggerTime = Date.now() + 30 * 1000; // for testing only, remove after
-    //    const secondsUntilAlert = Math.floor((triggerTime - Date.now()) / 1000);
+      //  if (hasPermission) {
+      // //    const triggerTime = completeTicket.expiryTimestamp - 10 * 60 * 1000;
+      // const triggerTime = Date.now() + 30 * 1000; // for testing only, remove after
+      //    const secondsUntilAlert = Math.floor((triggerTime - Date.now()) / 1000);
 
-    //    if (secondsUntilAlert > 0) {
-    //      const notificationId = await Notifications.scheduleNotificationAsync({
-    //        content: {
-    //          title: "Parking expires soon",
-    //          body: `${completeTicket.vehicleLabel} expires in 10 minutes.`,
-    //          sound: true,
-    //        },
-    //        trigger: {
-    //          seconds: secondsUntilAlert,
-    //        },
-    //      });
+      //    if (secondsUntilAlert > 0) {
+      //      const notificationId = await Notifications.scheduleNotificationAsync({
+      //        content: {
+      //          title: "Parking expires soon",
+      //          body: `${completeTicket.vehicleLabel} expires in 10 minutes.`,
+      //          sound: true,
+      //        },
+      //        trigger: {
+      //          seconds: secondsUntilAlert,
+      //        },
+      //      });
 
-    //      await AsyncStorage.setItem(TICKET_NOTIFICATION_KEY, notificationId);
-    //    }
-    //  }
+      //      await AsyncStorage.setItem(TICKET_NOTIFICATION_KEY, notificationId);
+      //    }
+      //  }
 
-     setActiveTicket(completeTicket);
+      setActiveTicket(completeTicket);
 
-     await AsyncStorage.setItem(
-       TICKET_STORAGE_KEY,
-       JSON.stringify(completeTicket),
-     );
-   } catch (error) {
-     console.error("Failed to initialize tracking countdown layer:", error);
-   }
- };
+      await AsyncStorage.setItem(
+        TICKET_STORAGE_KEY,
+        JSON.stringify(completeTicket),
+      );
+    } catch (error) {
+      console.error("Failed to initialize tracking countdown layer:", error);
+    }
+  };
   const clearParkingSession = async () => {
     try {
-      const notificationId = await AsyncStorage.getItem(
-        TICKET_NOTIFICATION_KEY,
-      );
+      //   const notificationId = await AsyncStorage.getItem(
+      //     TICKET_NOTIFICATION_KEY,
+      //   );
 
-      if (notificationId) {
-        await Notifications.cancelScheduledNotificationAsync(notificationId);
-        await AsyncStorage.removeItem(TICKET_NOTIFICATION_KEY);
-      }
+      //   if (notificationId) {
+      //     await Notifications.cancelScheduledNotificationAsync(notificationId);
+      //     await AsyncStorage.removeItem(TICKET_NOTIFICATION_KEY);
+      //   }
 
       setActiveTicket(null);
       await AsyncStorage.removeItem(TICKET_STORAGE_KEY);
@@ -223,29 +233,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+ 
+
+  // Update Vehicle
+  const updateVehicle = async (
+    id: string,
+    payload: Partial<Omit<VehicleProfile, "id">>,
+  ) => {
+    try {
+      const updatedVehicles = vehicles.map((vehicle) =>
+        vehicle.id === id ? { ...vehicle, ...payload } : vehicle,
+      );
+
+      setVehicles(updatedVehicles);
+
+      await AsyncStorage.setItem(
+        VEHICLES_STORAGE_KEY,
+        JSON.stringify(updatedVehicles),
+      );
+    } catch (error) {
+      console.error("Failed to update vehicle profile:", error);
+    }
+  };
+
   // 5. Document Operations with Auto-Save Flushing
-const addDocument = async (
-  newDoc: Omit<DocumentRecord, "id" | "createdAt">,
-) => {
-  try {
-    const docWithId: DocumentRecord = {
-      ...newDoc,
-      id: Date.now().toString(),
-      createdAt: Date.now(),
-    };
+  const addDocument = async (
+    newDoc: Omit<DocumentRecord, "id" | "createdAt">,
+  ) => {
+    try {
+      const docWithId: DocumentRecord = {
+        ...newDoc,
+        id: Date.now().toString(),
+        createdAt: Date.now(),
+      };
 
-    const updatedDocs = [...documents, docWithId];
+      const updatedDocs = [...documents, docWithId];
 
-    setDocuments(updatedDocs);
+      setDocuments(updatedDocs);
 
-    await AsyncStorage.setItem(
-      DOCUMENTS_STORAGE_KEY,
-      JSON.stringify(updatedDocs),
-    );
-  } catch (error) {
-    console.error("Failed to save document profile entry:", error);
-  }
-};
+      await AsyncStorage.setItem(
+        DOCUMENTS_STORAGE_KEY,
+        JSON.stringify(updatedDocs),
+      );
+    } catch (error) {
+      console.error("Failed to save document profile entry:", error);
+    }
+  };
+
+  //Delete doc
   const deleteDocument = async (id: string) => {
     try {
       const updatedDocs = documents.filter((d) => d.id !== id);
@@ -256,6 +291,27 @@ const addDocument = async (
       );
     } catch (error) {
       console.error("Failed to process document profile erasure:", error);
+    }
+  };
+
+  // update doc.
+  const updateDocument = async (
+    id: string,
+    payload: Partial<Omit<DocumentRecord, "id" | "createdAt">>,
+  ) => {
+    try {
+      const updatedDocs = documents.map((doc) =>
+        doc.id === id ? { ...doc, ...payload } : doc,
+      );
+
+      setDocuments(updatedDocs);
+
+      await AsyncStorage.setItem(
+        DOCUMENTS_STORAGE_KEY,
+        JSON.stringify(updatedDocs),
+      );
+    } catch (error) {
+      console.error("Failed to update document record:", error);
     }
   };
 
@@ -272,12 +328,14 @@ const addDocument = async (
         activeTicket,
         startParkingSession,
         clearParkingSession,
+        updateVehicle,
+        updateDocument,
       }}
     >
       {children}
     </AppContext.Provider>
   );
-};;
+};;;
 
 // 6. Custom React Hook interface for instant screen data streaming
 export const useApp = () => {
