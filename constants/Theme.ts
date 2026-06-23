@@ -1,6 +1,6 @@
 export const Theme = {
   colors: {
-    background: "#09090B",
+    background: "#090b0b",
     surface: "#121317",
     card: "#15161A",
     elevated: "#1C1E24",

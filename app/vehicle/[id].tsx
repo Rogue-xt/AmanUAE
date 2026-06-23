@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, View, Pressable } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
@@ -10,6 +10,10 @@ import { Alert } from "react-native";
 import * as Sharing from "expo-sharing";
 import { DocumentRecord } from "@/src/context/AppContext";
 import { DocumentPreviewModal } from "@/components/Documents/DocumentPreviewModal";
+import { DocumentEditModal } from "@/components/Documents/DocumentEditModal";
+import { Image } from "expo-image";
+import { Stack } from "expo-router";
+import { VehicleEditModal } from "@/components/vehicles/VehicleEditModal";
 const getDaysRemaining = (expiryDate: string) => {
   const today = new Date();
   const expiry = new Date(`${expiryDate}T00:00:00`);
@@ -21,29 +25,64 @@ const getDaysRemaining = (expiryDate: string) => {
   );
 };
 
-const formatDocType = (type: string) => {
-  const map: Record<string, string> = {
-    EmiratesID: "Emirates ID",
-    Mulkiya: "Mulkiya",
-    DrivingLicense: "Driving License",
-    Passport: "Passport",
-    Visa: "Visa",
-    Insurance: "Insurance",
-    Ejari: "Ejari",
-    Other: "Other",
-  };
 
-  return map[type] || type;
-};
 
 export default function VehicleDetailsScreen() {
+  const {
+    vehicles,
+    documents,
+    activeTicket,
+    updateDocument,
+    deleteDocument,
+    updateVehicle,
+    deleteVehicle,
+  } = useApp();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { vehicles, documents, activeTicket } = useApp();
+  const vehicle = vehicles.find((item) => item.id === id);
+  const [isEditVehicleOpen, setIsEditVehicleOpen] = useState(false);
+  const [editLabel, setEditLabel] = useState(vehicle?.label || "");
+  const [editEmirate, setEditEmirate] = useState(vehicle?.emirate || "Dubai");
+  const [editPlateCode, setEditPlateCode] = useState(vehicle?.plateCode || "");
+  const [editPlateNumber, setEditPlateNumber] = useState(
+    vehicle?.plateNumber || "",
+  );
   const [previewDoc, setPreviewDoc] = React.useState<DocumentRecord | null>(
     null,
   );
+  const [editingDocument, setEditingDocument] =
+    React.useState<DocumentRecord | null>(null);
 
+  const [documentEditMode, setDocumentEditMode] = React.useState<
+    "edit" | "renew"
+  >("edit");
+
+  const handleEditDocument = (doc: DocumentRecord) => {
+    setDocumentEditMode("edit");
+    setEditingDocument(doc);
+  };
+
+  const handleRenewDocument = (doc: DocumentRecord) => {
+    setDocumentEditMode("renew");
+    setEditingDocument(doc);
+  };
+  const handleSaveDocumentEdit = async (
+    id: string,
+    payload: Partial<Omit<DocumentRecord, "id" | "createdAt">>,
+  ) => {
+    await updateDocument(id, payload);
+  };
+
+    const handleDeleteDocument = (doc: DocumentRecord) => {
+      Alert.alert("Delete Document", `Remove "${doc.title}" from vault?`, [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => deleteDocument(doc.id),
+        },
+      ]);
+    };
 
   const linkedDocuments = useMemo(() => {
     return documents
@@ -54,7 +93,7 @@ export default function VehicleDetailsScreen() {
       }))
       .sort((a, b) => a.daysRemaining - b.daysRemaining);
   }, [documents, id]);
-  
+
   const handleViewDocument = async (doc: DocumentRecord) => {
     if (!doc.fileUri) {
       Alert.alert("No File", "This document has no attached file.");
@@ -103,16 +142,40 @@ export default function VehicleDetailsScreen() {
 
     await Sharing.shareAsync(doc.fileUri);
   };
+  const handleSaveVehicleEdit = async () => {
+    if (!vehicle) return;
 
-    const vehicle = vehicles.find((item) => item.id === id);
+    await updateVehicle(vehicle.id, {
+      label: editLabel.trim(),
+      emirate: editEmirate,
+      plateCode: editPlateCode.trim().toUpperCase(),
+      plateNumber: editPlateNumber.trim(),
+    });
 
+    setIsEditVehicleOpen(false);
+  };
+  const handleDeleteVehicle = () => {
+    if (!vehicle) return;
+
+    Alert.alert("Delete Vehicle", `Delete "${vehicle.label}" permanently?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          await deleteVehicle(vehicle.id);
+          router.replace("/(tabs)/vehicles");
+        },
+      },
+    ]);
+  };
 
   if (!vehicle) {
     return (
       <View style={styles.centerState}>
         <Text style={styles.errorTitle}>Vehicle not found</Text>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>Go Back</Text>
+          {/* <Text style={styles.backButtonText}>Go Back</Text> */}
         </Pressable>
       </View>
     );
@@ -125,27 +188,30 @@ export default function VehicleDetailsScreen() {
 
   return (
     <View style={styles.container}>
+      <Stack.Screen
+        options={{
+          title: vehicle?.label || "Vehicle Details",
+        }}
+      />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        <Pressable style={styles.headerBack} onPress={() => router.back()}>
-          <FontAwesome6
-            name="chevron-left"
-            size={14}
-            color={Theme.colors.textPrimary}
-          />
-          <Text style={styles.headerBackText}>Back</Text>
-        </Pressable>
-
         <View style={styles.heroCard}>
           <View style={styles.carVisual}>
-            <View style={styles.glowOrb} />
-            <FontAwesome6
-              name="car-side"
-              size={54}
-              color={Theme.colors.primaryGlow}
-            />
+            {vehicle.imageUri ? (
+              <Image
+                source={{ uri: vehicle.imageUri }}
+                style={styles.vehicleHeroImage}
+                contentFit="cover"
+              />
+            ) : (
+              <FontAwesome6
+                name="car-side"
+                size={44}
+                color={Theme.colors.primaryGlow}
+              />
+            )}
           </View>
 
           <Text style={styles.vehicleName}>{vehicle.label}</Text>
@@ -156,6 +222,37 @@ export default function VehicleDetailsScreen() {
           </View>
 
           <Text style={styles.emirate}>{formatEmirate(vehicle.emirate)}</Text>
+          <View style={styles.vehicleActionsRow}>
+            <Pressable
+              style={styles.editVehicleButton}
+              onPress={() => {
+                setEditLabel(vehicle.label);
+                setEditEmirate(vehicle.emirate);
+                setEditPlateCode(vehicle.plateCode);
+                setEditPlateNumber(vehicle.plateNumber);
+                setIsEditVehicleOpen(true);
+              }}
+            >
+              <FontAwesome6
+                name="pen"
+                size={13}
+                color={Theme.colors.primaryGlow}
+              />
+              <Text style={styles.editVehicleButtonText}>Edit</Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.deleteVehicleButton}
+              onPress={handleDeleteVehicle}
+            >
+              <FontAwesome6
+                name="trash"
+                size={13}
+                color={Theme.colors.danger}
+              />
+              <Text style={styles.deleteVehicleButtonText}>Delete</Text>
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.statsRow}>
@@ -215,12 +312,29 @@ export default function VehicleDetailsScreen() {
                 document={doc}
                 onView={handleViewDocument}
                 onShare={handleShareDocument}
+                onEdit={() => handleEditDocument(doc)}
+                onRenew={() => handleRenewDocument(doc)}
+                onDelete={handleDeleteDocument}
               />
             ))
           )}
           <DocumentPreviewModal
             document={previewDoc}
             onClose={() => setPreviewDoc(null)}
+          />
+          <DocumentEditModal
+            visible={!!editingDocument}
+            document={editingDocument}
+            mode={documentEditMode}
+            onClose={() => setEditingDocument(null)}
+            onSave={handleSaveDocumentEdit}
+          />
+          <VehicleEditModal
+            visible={isEditVehicleOpen}
+            mode="edit"
+            vehicle={vehicle}
+            onClose={() => setIsEditVehicleOpen(false)}
+            onSave={handleSaveVehicleEdit}
           />
         </View>
       </ScrollView>
@@ -436,5 +550,54 @@ const styles = StyleSheet.create({
   },
   docDanger: {
     color: Theme.colors.danger,
+  },
+  // image
+  vehicleHeroImage: {
+    width: "100%",
+    height: "100%",
+  },
+
+  vehicleActionsRow: {
+    flexDirection: "row",
+    gap: Theme.spacing.sm,
+    marginTop: Theme.spacing.lg,
+  },
+
+  editVehicleButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: Theme.colors.surface,
+    borderWidth: 1,
+    borderColor: Theme.colors.primaryGlow,
+    borderRadius: Theme.radius.lg,
+    paddingVertical: 12,
+  },
+
+  editVehicleButtonText: {
+    color: Theme.colors.primaryGlow,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  deleteVehicleButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: Theme.colors.dangerMuted,
+    borderWidth: 1,
+    borderColor: Theme.colors.danger,
+    borderRadius: Theme.radius.lg,
+    paddingVertical: 12,
+  },
+
+  deleteVehicleButtonText: {
+    color: Theme.colors.danger,
+    fontSize: 13,
+    fontWeight: "800",
   },
 });

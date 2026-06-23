@@ -361,6 +361,8 @@ const smsPreview = useMemo(() => {
                   emirate={car.emirate}
                   plateCode={car.plateCode}
                   plateNumber={car.plateNumber}
+                  imageUri={car.imageUri}
+                  imageName={car.imageName}
                   compact
                   selected={car.id === selectedVehicleId}
                   onPress={() => {
@@ -872,4 +874,5 @@ const styles = StyleSheet.create({
   generateButtonDisabled: {
     opacity: 0.45,
   },
+
 });

@@ -9,6 +9,7 @@ import {
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { Theme, VehicleType } from "@/constants/Theme";
 import { formatEmirate } from "./utils";
+import { Image } from "expo-image";
 
 const VEHICLE_ICONS: Record<
   VehicleType,
@@ -28,8 +29,11 @@ type PremiumVehicleCardProps = {
   vehicleType?: VehicleType;
   selected?: boolean;
   compact?: boolean;
+  imageUri?: string;
+  imageName?: string;
   onPress?: () => void;
   onView?: () => void;
+  onEdit?: () => void;
   onDelete?: () => void;
   style?: ViewStyle;
   linkedDocuments?: {
@@ -45,12 +49,15 @@ export function PremiumVehicleCard({
   emirate,
   plateCode,
   plateNumber,
+  imageUri,
+  imageName,
   vehicleType = "sedan",
   selected = false,
   compact = false,
   onPress,
   onView,
   onDelete,
+  onEdit,
   style,
   linkedDocuments,
 }: PremiumVehicleCardProps) {
@@ -58,34 +65,44 @@ export function PremiumVehicleCard({
 
   const content = (
     <>
-      <View
-        style={[styles.illustration, selected && styles.illustrationActive]}
-      >
-        <View style={styles.glowOrb} />
-        <FontAwesome6
-          name={iconName}
-          size={compact ? 28 : 42}
-          color={selected ? Theme.colors.primaryGlow : Theme.colors.textMuted}
-        />
-        <View style={styles.uaeAccent} />
-      </View>
+      <View style={styles.cardTopRow}>
+        <View
+          style={[styles.vehicleThumb, selected && styles.vehicleThumbActive]}
+        >
+          {imageUri ? (
+            <Image
+              source={{ uri: imageUri }}
+              style={styles.vehicleThumbImage}
+              contentFit="cover"
+            />
+          ) : (
+            <FontAwesome6
+              name="car-side"
+              size={24}
+              color={Theme.colors.primaryGlow}
+            />
+          )}
+        </View>
 
-      <Text style={styles.label} numberOfLines={1}>
-        {label}
-      </Text>
+        <View style={styles.vehicleInfo}>
+          <Text style={styles.label} numberOfLines={1}>
+            {label}
+          </Text>
 
-      <View style={styles.plateRow}>
-        <Text style={styles.plateCode}>{plateCode}</Text>
-        <Text style={styles.plateNumber}>{plateNumber}</Text>
-      </View>
+          <View style={styles.plateRow}>
+            <Text style={styles.plateCode}>{plateCode}</Text>
+            <Text style={styles.plateNumber}>{plateNumber}</Text>
+          </View>
 
-      <View style={styles.metaRow}>
-        <Text style={styles.emirate}>{formatEmirate(emirate)}</Text>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>Registered</Text>
+          <View style={styles.metaRow}>
+            <Text style={styles.emirate}>{formatEmirate(emirate)}</Text>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>Registered</Text>
+            </View>
+          </View>
         </View>
       </View>
-      <View style={styles.linkedDocsPanel}>
+      {/* <View style={styles.linkedDocsPanel}>
         <Text style={styles.linkedDocsTitle}>
           Linked Documents ({linkedDocuments?.length || 0})
         </Text>
@@ -109,7 +126,7 @@ export function PremiumVehicleCard({
             </View>
           ))
         )}
-      </View>
+      </View> */}
 
       {!compact && (onView || onDelete) && (
         <View style={styles.actions}>
@@ -121,6 +138,16 @@ export function PremiumVehicleCard({
                 color={Theme.colors.primaryGlow}
               />
               <Text style={styles.actionText}>View</Text>
+            </Pressable>
+          )}
+          {onEdit && (
+            <Pressable style={styles.actionButton} onPress={onEdit}>
+              <FontAwesome6
+                name="pen"
+                size={13}
+                color={Theme.colors.primaryGlow}
+              />
+              <Text style={styles.actionButtonText}>Edit</Text>
             </Pressable>
           )}
           {onDelete && (
@@ -182,11 +209,7 @@ const styles = StyleSheet.create({
     marginBottom: Theme.spacing.md,
     ...Theme.shadow.card,
   },
-  cardCompact: {
-    width: 168,
-    marginRight: Theme.spacing.md,
-    marginBottom: 0,
-  },
+ 
   cardSelected: {
     borderColor: Theme.colors.primary,
     backgroundColor: Theme.colors.elevated,
@@ -196,21 +219,7 @@ const styles = StyleSheet.create({
     opacity: 0.9,
     transform: [{ scale: 0.98 }],
   },
-  illustration: {
-    height: 88,
-    backgroundColor: Theme.colors.surface,
-    borderRadius: Theme.radius.lg,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Theme.spacing.md,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: Theme.colors.borderSubtle,
-  },
-  illustrationActive: {
-    borderColor: Theme.colors.primary,
-    backgroundColor: Theme.colors.primaryMuted,
-  },
+
   glowOrb: {
     position: "absolute",
     width: 80,
@@ -348,5 +357,71 @@ const styles = StyleSheet.create({
   },
   linkedDocDanger: {
     color: Theme.colors.danger,
+  },
+  actionRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 14,
+  },
+
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    backgroundColor: Theme.colors.surface,
+  },
+
+  actionButtonText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: Theme.colors.textPrimary,
+  },
+
+  //card new style
+  cardTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Theme.spacing.md,
+  },
+
+
+
+  vehicleThumbActive: {
+    borderColor: Theme.colors.primary,
+  },
+
+  vehicleThumbImage: {
+    width: "100%",
+    height: "100%",
+  },
+
+  vehicleInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  //compact image
+  cardCompact: {
+    width: 260,
+    marginRight: Theme.spacing.md,
+    marginBottom: 0,
+  },
+  vehicleThumb: {
+    width: 72,
+    height: 72,
+    borderRadius: Theme.radius.lg,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Theme.colors.primaryMuted,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderSubtle,
+    flexShrink: 0,
   },
 });

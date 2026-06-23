@@ -11,6 +11,8 @@ import { DocumentRecord } from "@/src/context/AppContext";
 import { Theme } from "@/constants/Theme";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
+import { Platform } from "react-native";
+import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 
 type Props = {
   visible: boolean;
@@ -38,25 +40,54 @@ export function DocumentEditModal({
     mimeType?: string;
     fileSize?: number;
   } | null>(null);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
-  useEffect(() => {
-    if (!document) return;
+useEffect(() => {
+  if (!document) return;
 
-    setTitle(document.title);
-    setExpiryDate(document.expiryDate);
-    setPickedFile(null);
-  }, [document]);
+  setTitle(document.title);
+  setExpiryDate(document.expiryDate);
+  setPickedFile(null);
 
-  const handleSave = async () => {
-    if (!document) return;
+  const existingDate = new Date(document.expiryDate);
+  if (!Number.isNaN(existingDate.getTime())) {
+    setSelectedDate(existingDate);
+  }
+}, [document]);
 
-  await onSave(document.id, {
-    title: title.trim(),
+
+const formatDate = (date: Date) => {
+  return date.toISOString().split("T")[0];
+};
+
+const handleDateChange = (_event: unknown, date?: Date) => {
+  if (Platform.OS !== "ios") {
+    setShowDatePicker(false);
+  }
+
+  if (!date) return;
+
+  setSelectedDate(date);
+  setExpiryDate(formatDate(date));
+};
+  //handle save
+const handleSave = async () => {
+  if (!document) return;
+
+  const payload: Partial<Omit<DocumentRecord, "id" | "createdAt">> = {
     expiryDate: expiryDate.trim(),
     ...(pickedFile ?? {}),
-  });
-    onClose();
   };
+
+  if (mode === "edit") {
+    payload.title = title.trim();
+  }
+
+  await onSave(document.id, payload);
+  onClose();
+};
+
 
   const handleReplaceFile = async () => {
     try {
@@ -70,8 +101,9 @@ export function DocumentEditModal({
       const asset = result.assets[0];
 
       const fileName = asset.name;
-      const destination = `${FileSystem.documentDirectory}${Date.now()}-${fileName}`;
-
+      // const destination = `${FileSystem.documentDirectory}${Date.now()}-${fileName}`;
+const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+const destination = `${FileSystem.documentDirectory}${Date.now()}-${safeFileName}`;
       await FileSystem.copyAsync({
         from: asset.uri,
         to: destination,
@@ -101,30 +133,51 @@ export function DocumentEditModal({
             {mode === "renew" ? "Renew Document" : "Edit Document"}
           </Text>
 
-          <Text style={styles.label}>Document Title</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Document Title"
-            placeholderTextColor={Theme.colors.textMuted}
-            value={title}
-            onChangeText={setTitle}
-          />
+          {mode === "edit" && (
+            <>
+              <Text style={styles.label}>Document Title</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Document Title"
+                placeholderTextColor={Theme.colors.textMuted}
+                value={title}
+                onChangeText={setTitle}
+              />
+            </>
+          )}
+          <Text style={styles.label}>
+            {mode === "renew" ? "New Expiry Date" : "Expiry Date"}
+          </Text>
+          <Pressable
+            style={styles.dateButton}
+            onPress={() => setShowDatePicker(true)}
+          >
+            <View>
+              <Text style={styles.dateMiniLabel}>Selected Date</Text>
+              <Text style={styles.dateValue}>
+                {expiryDate || "Select expiry date"}
+              </Text>
+            </View>
+          </Pressable>
 
-          <Text style={styles.label}>Expiry Date</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={Theme.colors.textMuted}
-            value={expiryDate}
-            onChangeText={setExpiryDate}
-          />
+          {showDatePicker && (
+            <DateTimePicker
+              value={selectedDate}
+              mode="date"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={handleDateChange}
+            />
+          )}
+
           <Pressable style={styles.fileReplaceBtn} onPress={handleReplaceFile}>
             <Text style={styles.fileReplaceText}>
               {pickedFile?.fileName
                 ? `Selected: ${pickedFile.fileName}`
-                : document?.fileName
-                  ? `Current: ${document.fileName} — Tap to replace`
-                  : "Attach / Replace File"}
+                : mode === "renew"
+                  ? "Attach Renewed File"
+                  : document?.fileName
+                    ? `Current: ${document.fileName} — Tap to replace`
+                    : "Attach / Replace File"}
             </Text>
           </Pressable>
           <View style={styles.actions}>
@@ -229,5 +282,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800",
     textAlign: "center",
+  },
+
+  //DATE PICKER
+  dateButton: {
+    backgroundColor: Theme.colors.surface,
+    borderRadius: Theme.radius.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    paddingHorizontal: Theme.spacing.md,
+    paddingVertical: Theme.spacing.md,
+    marginBottom: Theme.spacing.md,
+  },
+
+  dateMiniLabel: {
+    color: Theme.colors.textMuted,
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    marginBottom: 4,
+  },
+
+  dateValue: {
+    color: Theme.colors.textPrimary,
+    fontSize: 14,
+    fontWeight: "800",
   },
 });

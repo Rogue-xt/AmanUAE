@@ -11,11 +11,8 @@ import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { useApp, VehicleProfile } from "../../src/context/AppContext";
 import { Theme } from "@/constants/Theme";
 import { FadeInView } from "@/components/ui/FadeInView";
-import { KPICard } from "@/components/ui/KPICard";
-import { PremiumVehicleCard } from "@/components/ui/PremiumVehicleCard";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { ScreenContainer, SectionHeader } from "@/components/ui/ScreenLayout";
-import { SegmentedChips } from "@/components/ui/SegmentedChips";
 import { useRouter } from "expo-router";
 import {
   EMIRATES_LIST,
@@ -35,13 +32,10 @@ export default function DashboardScreen() {
     deleteVehicle,
     activeTicket,
     clearParkingSession,
-    startParkingSession,
   } = useApp();
-const router = useRouter();
+  const router = useRouter();
   const [now, setNow] = useState(Date.now());
   const [label, setLabel] = useState("");
-  const [selectedEmirate, setSelectedEmirate] =
-    useState<VehicleProfile["emirate"]>("Dubai");
   const [plateCode, setPlateCode] = useState("");
   const [plateNumber, setPlateNumber] = useState("");
 
@@ -121,70 +115,6 @@ const router = useRouter();
         ? Theme.colors.warning
         : Theme.colors.danger;
 
-  const handleStartTestTimer = async () => {
-    await startParkingSession({
-      vehicleLabel: "Test Vehicle",
-      plateDetails: "A 12345",
-      parkingEmirate: "Dubai",
-      expiryTimestamp: Date.now() + 2 * 60 * 1000,
-    });
-  };
-
-  const handleAddVehicle = async () => {
-    if (!label.trim() || !plateCode.trim() || !plateNumber.trim()) {
-      Alert.alert(
-        "Missing Info",
-        "Please fill out all the fields to secure your profile.",
-      );
-      return;
-    }
-
-    await addVehicle({
-      label: label.trim(),
-      emirate: selectedEmirate,
-      plateCode: plateCode.trim().toUpperCase(),
-      plateNumber: plateNumber.trim(),
-    });
-
-    setLabel("");
-    setPlateCode("");
-    setPlateNumber("");
-    Alert.alert(
-      "Profile Secured",
-      "Vehicle successfully locked into local storage memory.",
-    );
-  };
-
-  // const handleViewVehicle = (vehicle: VehicleProfile) => {
-  //   Alert.alert(
-  //     vehicle.label,
-  //     `${formatEmirate(vehicle.emirate)}\nPlate: ${vehicle.plateCode} ${vehicle.plateNumber}`,
-  //   );
-  // };
-const handleViewVehicle = (vehicle: VehicleProfile) => {
-  router.push(`/vehicle/${vehicle.id}`);
-};
-  const handleDeleteVehicle = (vehicle: VehicleProfile) => {
-    Alert.alert(
-      "Remove Vehicle",
-      `Delete ${vehicle.label} from your vault?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => deleteVehicle(vehicle.id),
-        },
-      ],
-    );
-  };
-
-  const emirateOptions = EMIRATES_LIST.map((em) => ({
-    value: em,
-    label: formatEmirate(em),
-  }));
-
-  
   return (
     <ScreenContainer>
       <ScrollView
@@ -314,50 +244,8 @@ const handleViewVehicle = (vehicle: VehicleProfile) => {
                 />
               </View>
               <Text style={styles.emptyHeroTitle}>No Active Parking</Text>
-              <Text style={styles.emptyHeroSub}>
-                Start a session from the Parking tab or use the test timer
-                below.
-              </Text>
-              <View style={styles.complianceBar}>
-                <Text style={styles.complianceBarLabel}>Compliance Score</Text>
-                <View style={styles.complianceBarTrack}>
-                  <View
-                    style={[
-                      styles.complianceBarFill,
-                      {
-                        width: `${complianceScore}%`,
-                        backgroundColor: complianceColor,
-                      },
-                    ]}
-                  />
-                </View>
-                <Text
-                  style={[
-                    styles.complianceBarValue,
-                    { color: complianceColor },
-                  ]}
-                >
-                  {complianceScore}%
-                </Text>
-              </View>
             </View>
           )}
-        </FadeInView>
-
-        <FadeInView delay={240}>
-          <View style={styles.kpiRow}>
-            <KPICard label="Vehicles" value={vehicles.length} />
-            <KPICard
-              label="Documents"
-              value={documents.length}
-              accent={Theme.colors.primaryGlow}
-            />
-            <KPICard
-              label="Alerts"
-              value={alertCount}
-              accent={alertCount > 0 ? Theme.colors.warning : undefined}
-            />
-          </View>
         </FadeInView>
 
         <FadeInView delay={320}>
@@ -403,122 +291,6 @@ const handleViewVehicle = (vehicle: VehicleProfile) => {
               ))
             )}
           </View>
-        </FadeInView>
-
-        <FadeInView delay={400}>
-          <SectionHeader
-            title="Your Fleet"
-            subtitle={`${vehicles.length} registered vehicle${vehicles.length !== 1 ? "s" : ""}`}
-          />
-          {vehicles.length === 0 ? (
-            <View style={styles.emptyFleet}>
-              <FontAwesome6
-                name="car"
-                size={32}
-                color={Theme.colors.textMuted}
-              />
-              <Text style={styles.emptyFleetTitle}>No vehicles linked</Text>
-              <Text style={styles.emptyFleetSub}>
-                Register your first vehicle below to unlock smart parking.
-              </Text>
-            </View>
-          ) : (
-            vehicles.map((vehicle) => {
-              const linkedDocs = documents
-                .filter((doc) => doc.vehicleId === vehicle.id)
-                .map((doc) => ({
-                  id: doc.id,
-                  title: doc.title || formatDocType(doc.type),
-                  type: formatDocType(doc.type),
-                  daysRemaining: getDaysRemaining(doc.expiryDate),
-                }))
-                .sort((a, b) => a.daysRemaining - b.daysRemaining);
-
-              return (
-                <PremiumVehicleCard
-                  key={vehicle.id}
-                  label={vehicle.label}
-                  emirate={vehicle.emirate}
-                  plateCode={vehicle.plateCode}
-                  plateNumber={vehicle.plateNumber}
-                  linkedDocuments={linkedDocs}
-                  vehicleType={
-                    vehicle.label.toLowerCase().includes("patrol") ||
-                    vehicle.label.toLowerCase().includes("suv")
-                      ? "suv"
-                      : "sedan"
-                  }
-                  onView={() => handleViewVehicle(vehicle)}
-                  onDelete={() => handleDeleteVehicle(vehicle)}
-                />
-              );
-            })  
-          )}
-        </FadeInView>
-
-        <FadeInView delay={480}>
-          <View style={styles.formCard}>
-            <SectionHeader
-              title="Register Vehicle"
-              subtitle="Add to your secure fleet"
-            />
-
-            <TextInput
-              style={styles.input}
-              placeholder="Vehicle nickname (e.g. My Patrol)"
-              placeholderTextColor={Theme.colors.textMuted}
-              value={label}
-              onChangeText={setLabel}
-            />
-
-            <Text style={styles.inputLabel}>Emirate</Text>
-            <SegmentedChips
-              options={emirateOptions}
-              selected={selectedEmirate}
-              onSelect={setSelectedEmirate}
-              horizontal
-            />
-
-            <View style={styles.plateInputs}>
-              <TextInput
-                style={[styles.input, styles.plateCodeInput]}
-                placeholder="Code"
-                placeholderTextColor={Theme.colors.textMuted}
-                value={plateCode}
-                onChangeText={setPlateCode}
-                autoCapitalize="characters"
-              />
-              <TextInput
-                style={[styles.input, styles.plateNumberInput]}
-                placeholder="Plate Number"
-                placeholderTextColor={Theme.colors.textMuted}
-                value={plateNumber}
-                keyboardType="numeric"
-                onChangeText={setPlateNumber}
-              />
-            </View>
-
-            <PrimaryButton
-              label="Secure Vehicle"
-              onPress={handleAddVehicle}
-              variant="success"
-            />
-          </View>
-        </FadeInView>
-
-        <FadeInView delay={560}>
-          <PrimaryButton
-            label="Start 2 Min Test Timer"
-            onPress={handleStartTestTimer}
-            variant="ghost"
-            icon={
-              <FontAwesome6
-                name="clock"
-                size={14}
-                color={Theme.colors.primaryGlow}
-              />
-            }
-          />
         </FadeInView>
       </ScrollView>
     </ScreenContainer>
@@ -711,31 +483,7 @@ const styles = StyleSheet.create({
     marginTop: Theme.spacing.sm,
     lineHeight: 19,
   },
-  complianceBar: {
-    width: "100%",
-    marginTop: Theme.spacing.lg,
-  },
-  complianceBarLabel: {
-    ...Theme.typography.label,
-    color: Theme.colors.textMuted,
-    marginBottom: Theme.spacing.sm,
-  },
-  complianceBarTrack: {
-    height: 6,
-    backgroundColor: Theme.colors.surface,
-    borderRadius: 3,
-    overflow: "hidden",
-  },
-  complianceBarFill: {
-    height: "100%",
-    borderRadius: 3,
-  },
-  complianceBarValue: {
-    fontSize: 14,
-    fontWeight: "800",
-    marginTop: Theme.spacing.sm,
-    textAlign: "right",
-  },
+
   kpiRow: {
     flexDirection: "row",
     gap: Theme.spacing.sm,
@@ -794,62 +542,4 @@ const styles = StyleSheet.create({
   docDaysDanger: {
     color: Theme.colors.danger,
   },
-  emptyFleet: {
-    backgroundColor: Theme.colors.card,
-    borderRadius: Theme.radius.xl,
-    padding: Theme.spacing.xxl,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: Theme.colors.border,
-    borderStyle: "dashed",
-    marginBottom: Theme.spacing.lg,
-  },
-  emptyFleetTitle: {
-    color: Theme.colors.textPrimary,
-    fontSize: 16,
-    fontWeight: "700",
-    marginTop: Theme.spacing.md,
-  },
-  emptyFleetSub: {
-    color: Theme.colors.textMuted,
-    fontSize: 13,
-    textAlign: "center",
-    marginTop: Theme.spacing.sm,
-    lineHeight: 19,
-  },
-  formCard: {
-    backgroundColor: Theme.colors.card,
-    borderRadius: Theme.radius.xl,
-    padding: Theme.spacing.lg,
-    borderWidth: 1,
-    borderColor: Theme.colors.border,
-    marginBottom: Theme.spacing.lg,
-  },
-  input: {
-    backgroundColor: Theme.colors.surface,
-    color: Theme.colors.textPrimary,
-    borderRadius: Theme.radius.md,
-    padding: Theme.spacing.md,
-    fontSize: 15,
-    marginBottom: Theme.spacing.md,
-    borderWidth: 1,
-    borderColor: Theme.colors.border,
-  },
-  inputLabel: {
-    ...Theme.typography.label,
-    color: Theme.colors.textMuted,
-    marginBottom: Theme.spacing.sm,
-  },
-  plateInputs: {
-    flexDirection: "row",
-    gap: Theme.spacing.md,
-  },
-  plateCodeInput: {
-    flex: 0.35,
-  },
-  plateNumberInput: {
-    flex: 0.65,
-  },
-
- 
 });

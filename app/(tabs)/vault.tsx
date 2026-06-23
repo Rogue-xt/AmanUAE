@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/utils";
 import { DocumentCard } from "@/components/Documents/DocumentCard";
 import { DocumentEditModal } from "@/components/Documents/DocumentEditModal";
+import { DocumentPreviewModal } from "@/components/Documents/DocumentPreviewModal";
 
 const DOCUMENT_TYPES: DocumentRecord["type"][] = [
   "EmiratesID",
@@ -70,6 +71,7 @@ export default function VaultScreen() {
   const [expiryDate, setExpiryDate] = useState("");
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [isAddDocumentOpen, setIsAddDocumentOpen] = useState(false);
   const [pickedFile, setPickedFile] = useState<{
     name: string;
     uri: string;
@@ -77,13 +79,10 @@ export default function VaultScreen() {
     size?: number;
   } | null>(null);
 
-  const [editTitle, setEditTitle] = useState("");
-  const [editExpiryDate, setEditExpiryDate] = useState("");
-  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [documentEditMode, setDocumentEditMode] = useState<"edit" | "renew">(
     "edit",
   );
-  
+
   const [editingDocument, setEditingDocument] = useState<DocumentRecord | null>(
     null,
   );
@@ -95,34 +94,21 @@ export default function VaultScreen() {
   const handleEditDocument = (doc: DocumentRecord) => {
     setDocumentEditMode("edit");
     setEditingDocument(doc);
-    // setEditTitle(doc.title);
-    // setEditExpiryDate(doc.expiryDate);
-    // setIsEditModalVisible(true);
   };
 
   const handleRenewDocument = (doc: DocumentRecord) => {
-     setDocumentEditMode("edit");
+    setDocumentEditMode("renew");
     setEditingDocument(doc);
-    // setEditTitle(doc.title);
-    // setEditExpiryDate(doc.expiryDate);
-    // setIsEditModalVisible(true);
   };
 
-  const handleCloseEditModal = () => {
-    setIsEditModalVisible(false);
-    setEditingDocument(null);
+
+  const handleSaveDocumentEdit = async (
+    id: string,
+    payload: Partial<Omit<DocumentRecord, "id" | "createdAt">>,
+  ) => {
+    await updateDocument(id, payload);
   };
 
-  const handleSaveDocumentEdit = async () => {
-    if (!editingDocument) return;
-
-    await updateDocument(editingDocument.id, {
-      title: editTitle.trim(),
-      expiryDate: editExpiryDate,
-    });
-
-    handleCloseEditModal();
-  };
   const handleDateChange = (event: DateTimePickerEvent, date?: Date) => {
     if (Platform.OS === "android") {
       setShowDatePicker(false);
@@ -211,6 +197,7 @@ export default function VaultScreen() {
     setExpiryDate("");
     setPickedFile(null);
     setSelectedVehicleId("");
+    setIsAddDocumentOpen(false);
 
     Alert.alert("Saved", "Document tracker secured in your local vault.");
   };
@@ -221,12 +208,28 @@ export default function VaultScreen() {
       return;
     }
 
-    const isImage =
-      doc.mimeType?.startsWith("image/") ||
-      doc.fileName?.toLowerCase().endsWith(".jpg") ||
-      doc.fileName?.toLowerCase().endsWith(".jpeg") ||
-      doc.fileName?.toLowerCase().endsWith(".png");
+    const fileName = doc.fileName?.toLowerCase() ?? "";
+    const mimeType = doc.mimeType?.toLowerCase() ?? "";
+    const fileUri = doc.fileUri?.toLowerCase() ?? "";
 
+    const isImage =
+      mimeType.startsWith("image/") ||
+      fileName.endsWith(".jpg") ||
+      fileName.endsWith(".jpeg") ||
+      fileName.endsWith(".png") ||
+      fileName.endsWith(".webp") ||
+      fileName.endsWith(".heic") ||
+      fileUri.includes(".jpg") ||
+      fileUri.includes(".jpeg") ||
+      fileUri.includes(".png") ||
+      fileUri.includes(".webp") ||
+      fileUri.includes(".heic");
+    console.log("DOC VIEW DEBUG", {
+      fileName: doc.fileName,
+      mimeType: doc.mimeType,
+      fileUri: doc.fileUri,
+      isImage,
+    });
     if (isImage) {
       setPreviewDoc(doc);
       return;
@@ -278,12 +281,7 @@ export default function VaultScreen() {
     ]);
   };
 
-  useEffect(() => {
-    if (!editingDocument) return;
 
-    setEditTitle(editingDocument.title);
-    setEditExpiryDate(editingDocument.expiryDate);
-  }, [editingDocument]);
   return (
     <ScreenContainer>
       <ScrollView
@@ -297,6 +295,8 @@ export default function VaultScreen() {
             title="Document Shield"
             subtitle="Store critical UAE documents, track expiry, and retrieve when needed."
           />
+
+       
         </FadeInView>
 
         <FadeInView delay={80}>
@@ -324,144 +324,168 @@ export default function VaultScreen() {
           </View>
         </FadeInView>
 
-        <FadeInView delay={160}>
-          <View style={styles.formCard}>
-            <View style={styles.formHeader}>
-              <SectionHeader
-                title="Add Document"
-                subtitle="Local encrypted storage"
-              />
-              {/* <View style={styles.secureBadge}>
-                <FontAwesome6
-                  name="lock"
-                  size={10}
-                  color={Theme.colors.success}
-                />
-                <Text style={styles.secureBadgeText}>LOCAL ONLY</Text>
-              </View> */}
-            </View>
-            <Text style={styles.fieldLabel}>Linked Vehicle</Text>
+        {isAddDocumentOpen && (
+          <Modal
+            visible={isAddDocumentOpen}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setIsAddDocumentOpen(false)}
+          >
+            <View style={styles.addModalOverlay}>
+              <View style={styles.addModalCard}>
+                <View style={styles.formHeader}>
+                  <View style={styles.modalHeaderText}>
+                    <Text style={styles.modalTitle}>Add Document</Text>
+                    <Text style={styles.modalSubtitle}>
+                      Local device storage
+                    </Text>
+                  </View>
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.vehicleLinkRibbon}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.vehicleLinkChip,
-                  selectedVehicleId === "" && styles.vehicleLinkChipActive,
-                ]}
-                onPress={() => setSelectedVehicleId("")}
-              >
-                <Text
-                  style={[
-                    styles.vehicleLinkText,
-                    selectedVehicleId === "" && styles.vehicleLinkTextActive,
-                  ]}
-                >
-                  None
-                </Text>
-              </TouchableOpacity>
-
-              {vehicles.map((vehicle) => (
-                <TouchableOpacity
-                  key={vehicle.id}
-                  style={[
-                    styles.vehicleLinkChip,
-                    selectedVehicleId === vehicle.id &&
-                      styles.vehicleLinkChipActive,
-                  ]}
-                  onPress={() => setSelectedVehicleId(vehicle.id)}
-                >
-                  <Text
-                    style={[
-                      styles.vehicleLinkText,
-                      selectedVehicleId === vehicle.id &&
-                        styles.vehicleLinkTextActive,
-                    ]}
+                  <Pressable
+                    style={styles.cancelPill}
+                    onPress={() => setIsAddDocumentOpen(false)}
                   >
-                    {vehicle.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+                    <FontAwesome6
+                      name="xmark"
+                      size={12}
+                      color={Theme.colors.textPrimary}
+                    />
+                    <Text style={styles.cancelPillText}>Close</Text>
+                  </Pressable>
+                </View>
 
-            <SegmentedChips
-              options={docTypeOptions}
-              selected={selectedType}
-              onSelect={setSelectedType}
-              horizontal
-            />
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <Text style={styles.fieldLabel}>Linked Vehicle</Text>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Document title"
-              placeholderTextColor={Theme.colors.textMuted}
-              value={title}
-              onChangeText={setTitle}
-            />
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.vehicleLinkRibbon}
+                  >
+                    <TouchableOpacity
+                      style={[
+                        styles.vehicleLinkChip,
+                        selectedVehicleId === "" &&
+                          styles.vehicleLinkChipActive,
+                      ]}
+                      onPress={() => setSelectedVehicleId("")}
+                    >
+                      <Text
+                        style={[
+                          styles.vehicleLinkText,
+                          selectedVehicleId === "" &&
+                            styles.vehicleLinkTextActive,
+                        ]}
+                      >
+                        None
+                      </Text>
+                    </TouchableOpacity>
 
-            <Pressable
-              style={styles.dateButton}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <View>
-                <Text style={styles.dateLabel}>Expiry Date</Text>
-                <Text style={styles.dateValue}>
-                  {expiryDate || "Select expiry date"}
-                </Text>
+                    {vehicles.map((vehicle) => (
+                      <TouchableOpacity
+                        key={vehicle.id}
+                        style={[
+                          styles.vehicleLinkChip,
+                          selectedVehicleId === vehicle.id &&
+                            styles.vehicleLinkChipActive,
+                        ]}
+                        onPress={() => setSelectedVehicleId(vehicle.id)}
+                      >
+                        <Text
+                          style={[
+                            styles.vehicleLinkText,
+                            selectedVehicleId === vehicle.id &&
+                              styles.vehicleLinkTextActive,
+                          ]}
+                        >
+                          {vehicle.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+
+                  <SegmentedChips
+                    options={docTypeOptions}
+                    selected={selectedType}
+                    onSelect={setSelectedType}
+                    horizontal
+                  />
+
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Document title"
+                    placeholderTextColor={Theme.colors.textMuted}
+                    value={title}
+                    onChangeText={setTitle}
+                  />
+
+                  <Pressable
+                    style={styles.dateButton}
+                    onPress={() => setShowDatePicker(true)}
+                  >
+                    <View>
+                      <Text style={styles.dateLabel}>Expiry Date</Text>
+                      <Text style={styles.dateValue}>
+                        {expiryDate || "Select expiry date"}
+                      </Text>
+                    </View>
+                    <FontAwesome6
+                      name="calendar"
+                      size={18}
+                      color={Theme.colors.primaryGlow}
+                    />
+                  </Pressable>
+
+                  {showDatePicker && (
+                    <DateTimePicker
+                      value={selectedDate}
+                      mode="date"
+                      display={Platform.OS === "ios" ? "spinner" : "default"}
+                      onChange={handleDateChange}
+                    />
+                  )}
+
+                  <Pressable
+                    style={styles.uploadZone}
+                    onPress={handlePickDocument}
+                  >
+                    <View style={styles.uploadIcon}>
+                      <FontAwesome6
+                        name="cloud-arrow-up"
+                        size={22}
+                        color={Theme.colors.primaryGlow}
+                      />
+                    </View>
+                    <View style={styles.uploadText}>
+                      <Text style={styles.uploadTitle}>
+                        {pickedFile ? pickedFile.name : "Secure Upload Zone"}
+                      </Text>
+                      <Text style={styles.uploadSub}>
+                        {pickedFile
+                          ? formatFileSize(pickedFile.size)
+                          : "Attach PDF or image — Mulkiya, Emirates ID, visa"}
+                      </Text>
+                    </View>
+                  </Pressable>
+
+                  <PrimaryButton
+                    label="Secure Document"
+                    onPress={handleAddDocument}
+                    variant="success"
+                    icon={
+                      <FontAwesome6
+                        name="shield"
+                        size={14}
+                        color={Theme.colors.textPrimary}
+                      />
+                    }
+                  />
+                </ScrollView>
+              
               </View>
-              <FontAwesome6
-                name="calendar"
-                size={18}
-                color={Theme.colors.primaryGlow}
-              />
-            </Pressable>
-
-            {showDatePicker && (
-              <DateTimePicker
-                value={selectedDate}
-                mode="date"
-                display={Platform.OS === "ios" ? "spinner" : "default"}
-                onChange={handleDateChange}
-              />
-            )}
-
-            <Pressable style={styles.uploadZone} onPress={handlePickDocument}>
-              <View style={styles.uploadIcon}>
-                <FontAwesome6
-                  name="cloud-arrow-up"
-                  size={22}
-                  color={Theme.colors.primaryGlow}
-                />
-              </View>
-              <View style={styles.uploadText}>
-                <Text style={styles.uploadTitle}>
-                  {pickedFile ? pickedFile.name : "Secure Upload Zone"}
-                </Text>
-                <Text style={styles.uploadSub}>
-                  {pickedFile
-                    ? formatFileSize(pickedFile.size)
-                    : "Attach PDF or image — Mulkiya, Emirates ID, visa"}
-                </Text>
-              </View>
-            </Pressable>
-
-            <PrimaryButton
-              label="Secure Document"
-              onPress={handleAddDocument}
-              variant="success"
-              icon={
-                <FontAwesome6
-                  name="shield"
-                  size={14}
-                  color={Theme.colors.textPrimary}
-                />
-              }
-            />
-          </View>
-        </FadeInView>
+            </View>
+          </Modal>
+        )}
 
         <FadeInView delay={240}>
           <SectionHeader
@@ -498,7 +522,10 @@ export default function VaultScreen() {
           )}
         </FadeInView>
       </ScrollView>
-
+      <DocumentPreviewModal
+        document={previewDoc}
+        onClose={() => setPreviewDoc(null)}
+      />
       <DocumentEditModal
         visible={!!editingDocument}
         document={editingDocument}
@@ -506,6 +533,18 @@ export default function VaultScreen() {
         onClose={() => setEditingDocument(null)}
         onSave={handleSaveDocumentEdit}
       />
+      {!isAddDocumentOpen && (
+        <Pressable
+          style={styles.fab}
+          onPress={() => setIsAddDocumentOpen(true)}
+        >
+          <FontAwesome6
+            name="plus"
+            size={18}
+            color={Theme.colors.textPrimary}
+          />
+        </Pressable>
+      )}
     </ScreenContainer>
   );
 }
@@ -548,7 +587,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
-    marginBottom: Theme.spacing.sm,
+    gap: 12,
+    marginBottom: 20,
   },
   secureBadge: {
     flexDirection: "row",
@@ -910,5 +950,100 @@ const styles = StyleSheet.create({
     color: Theme.colors.textPrimary,
     fontSize: 14,
     fontWeight: "900",
+  },
+
+  //Modal style
+  headerAddButton: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: Theme.colors.primary,
+    borderRadius: Theme.radius.full,
+    paddingHorizontal: Theme.spacing.lg,
+    paddingVertical: Theme.spacing.sm,
+    marginTop: Theme.spacing.md,
+    marginBottom: Theme.spacing.lg,
+  },
+
+  headerAddButtonText: {
+    color: Theme.colors.textPrimary,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+
+  addModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.72)",
+    justifyContent: "flex-end",
+  },
+
+  addModalCard: {
+    maxHeight: "88%",
+    backgroundColor: Theme.colors.background,
+    borderTopLeftRadius: Theme.radius.xl,
+    borderTopRightRadius: Theme.radius.xl,
+    padding: Theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: Theme.colors.textPrimary,
+  },
+
+  modalSubtitle: {
+    fontSize: 13,
+    marginTop: 4,
+    color: Theme.colors.textSecondary,
+  },
+
+  cancelPill: {
+    flexShrink: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#1F2937",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+
+  cancelPillText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 12,
+  },
+  modalHeaderText: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 12,
+  },
+
+  //floating add btn
+  fab: {
+    position: "absolute",
+    right: 22,
+    bottom: 85,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Theme.colors.primary,
+    borderWidth: 1,
+    borderColor: Theme.colors.primaryGlow,
+    shadowColor: Theme.colors.primaryGlow,
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
+   
+  },
+  container: {
+    flex: 1,
+    position: "relative",
+    backgroundColor: Theme.colors.background,
   },
 });

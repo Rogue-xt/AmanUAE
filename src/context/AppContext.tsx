@@ -16,6 +16,8 @@ export interface VehicleProfile {
     | "Fujairah";
   plateCode: string;
   plateNumber: string;
+  imageUri?: string;
+  imageName?: string;
 }
 
 export interface DocumentRecord {
@@ -208,6 +210,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const vehicleWithId: VehicleProfile = {
         ...newVehicle,
         id: Date.now().toString(), // Generate a safe unique runtime timestamp identifier
+        
       };
       const updatedVehicles = [...vehicles, vehicleWithId];
       setVehicles(updatedVehicles);

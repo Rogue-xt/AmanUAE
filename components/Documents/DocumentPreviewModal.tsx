@@ -1,7 +1,8 @@
 import React from "react";
-import { Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { DocumentRecord } from "@/src/context/AppContext";
 import { Theme } from "@/constants/Theme";
+import { Image } from "expo-image";
 
 type Props = {
   document: DocumentRecord | null;
@@ -9,6 +10,7 @@ type Props = {
 };
 
 export function DocumentPreviewModal({ document, onClose }: Props) {
+  console.log("PREVIEW MODAL DOC", document?.fileUri);
   return (
     <Modal
       visible={!!document}
@@ -29,10 +31,16 @@ export function DocumentPreviewModal({ document, onClose }: Props) {
         </View>
 
         {document?.fileUri && (
+          // <Image
+          //   source={{ uri: document.fileUri }}
+          //   style={styles.image}
+          //   resizeMode="contain"
+          // />
+          
           <Image
-            source={{ uri: document.fileUri }}
+            source={document.fileUri}
             style={styles.image}
-            resizeMode="contain"
+            contentFit="contain"
           />
         )}
       </View>
