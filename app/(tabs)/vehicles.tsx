@@ -1,5 +1,12 @@
-import React, {  useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useState } from "react";
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { useRouter } from "expo-router";
 import { Theme } from "@/constants/Theme";
@@ -21,7 +28,7 @@ export default function VehiclesScreen() {
   const router = useRouter();
   const { vehicles, documents, addVehicle, updateVehicle, deleteVehicle } =
     useApp();
-const [isAddVehicleOpen, setIsAddVehicleOpen] = useState(false);
+  const [isAddVehicleOpen, setIsAddVehicleOpen] = useState(false);
   const [vehicleMode, setVehicleMode] = useState<"add" | "edit">("add");
 
   const [editingVehicle, setEditingVehicle] = useState<VehicleProfile | null>(
@@ -40,36 +47,36 @@ const [isAddVehicleOpen, setIsAddVehicleOpen] = useState(false);
     setIsAddVehicleOpen(false);
   };
 
-const openAddVehicle = () => {
-  setVehicleMode("add");
-  setEditingVehicle(null);
-  setIsAddVehicleOpen(true);
-};
+  const openAddVehicle = () => {
+    setVehicleMode("add");
+    setEditingVehicle(null);
+    setIsAddVehicleOpen(true);
+  };
 
-const openEditVehicle = (vehicle: VehicleProfile) => {
-  setVehicleMode("edit");
-  setEditingVehicle(vehicle);
-  setIsAddVehicleOpen(true);
-};
-const handleDeleteVehicle = (vehicle: VehicleProfile) => {
-  Alert.alert(
-    "Delete Vehicle",
-    `Are you sure you want to delete "${vehicle.label}"?`,
-    [
-      {
-        text: "Cancel",
-        style: "cancel",
-      },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          await deleteVehicle(vehicle.id);
+  const openEditVehicle = (vehicle: VehicleProfile) => {
+    setVehicleMode("edit");
+    setEditingVehicle(vehicle);
+    setIsAddVehicleOpen(true);
+  };
+  const handleDeleteVehicle = (vehicle: VehicleProfile) => {
+    Alert.alert(
+      "Delete Vehicle",
+      `Are you sure you want to delete "${vehicle.label}"?`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
         },
-      },
-    ],
-  );
-};
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            await deleteVehicle(vehicle.id);
+          },
+        },
+      ],
+    );
+  };
   return (
     <ScreenContainer>
       <ScrollView
@@ -77,35 +84,52 @@ const handleDeleteVehicle = (vehicle: VehicleProfile) => {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.scrollContent}
       >
-        <FadeInView delay={0}>
+        {/* <FadeInView delay={0}>
           <ScreenHeader
             // kicker="Vehicle Profiles"
             title="My Vehicles"
             // subtitle="Manage UAE plate profiles and linked compliance documents."
           />
-        </FadeInView>
+        </FadeInView> */}
 
         <FadeInView delay={80}>
-          <View style={styles.heroCard}>
-            <View style={styles.heroIcon}>
+          <View style={styles.compactStatsBar}>
+            <View style={styles.compactStatItem}>
               <FontAwesome6
                 name="car-side"
-                size={24}
+                size={13}
                 color={Theme.colors.primaryGlow}
               />
+              <Text style={styles.compactStatValue}>{vehicles.length}</Text>
+              <Text style={styles.compactStatLabel}>Vehicles</Text>
             </View>
 
-            <View style={styles.kpiRow}>
-              <KPICard label="Vehicles" value={vehicles.length} />
-              <KPICard
-                label="Linked Docs"
-                value={documents.filter((d) => d.vehicleId).length}
+            <View style={styles.compactDivider} />
+
+            <View style={styles.compactStatItem}>
+              <FontAwesome6
+                name="link"
+                size={13}
+                color={Theme.colors.primaryGlow}
               />
-              <KPICard
-                label="Unlinked"
-                value={documents.filter((d) => !d.vehicleId).length}
-                accent={Theme.colors.warning}
+              <Text style={styles.compactStatValue}>
+                {documents.filter((d) => d.vehicleId).length}
+              </Text>
+              <Text style={styles.compactStatLabel}>Linked</Text>
+            </View>
+
+            <View style={styles.compactDivider} />
+
+            <View style={styles.compactStatItem}>
+              <FontAwesome6
+                name="circle-exclamation"
+                size={13}
+                color={Theme.colors.warning}
               />
+              <Text style={styles.compactStatValue}>
+                {documents.filter((d) => !d.vehicleId).length}
+              </Text>
+              <Text style={styles.compactStatLabel}>Unlinked</Text>
             </View>
           </View>
         </FadeInView>
@@ -163,8 +187,8 @@ const handleDeleteVehicle = (vehicle: VehicleProfile) => {
                     plateNumber={vehicle.plateNumber}
                     linkedDocuments={linkedDocuments}
                     onView={() => router.push(`/vehicle/${vehicle.id}`)}
-                    onDelete={() => handleDeleteVehicle(vehicle)}
-                    onEdit={() => openEditVehicle(vehicle)}
+                    // onDelete={() => handleDeleteVehicle(vehicle)}
+                    // onEdit={() => openEditVehicle(vehicle)}
                   />
                 </FadeInView>
               );
@@ -202,30 +226,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Theme.spacing.xl,
     paddingBottom: 120,
-  },
-
-  heroCard: {
-    backgroundColor: Theme.colors.card,
-    borderRadius: Theme.radius.xxl,
-    padding: Theme.spacing.xl,
-    borderWidth: 1,
-    borderColor: Theme.colors.border,
-    marginBottom: Theme.spacing.lg,
-  },
-
-  heroIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: Theme.radius.lg,
-    backgroundColor: Theme.colors.primaryMuted,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Theme.spacing.lg,
-  },
-
-  kpiRow: {
-    flexDirection: "row",
-    gap: Theme.spacing.sm,
   },
 
   emptyCard: {
@@ -409,5 +409,44 @@ const styles = StyleSheet.create({
     color: Theme.colors.textSecondary,
     fontSize: 12,
     marginTop: 4,
+  },
+
+  // compact card
+  compactStatsBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: Theme.spacing.md,
+  },
+
+  compactStatItem: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+  },
+
+  compactStatValue: {
+    color: Theme.colors.textPrimary,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+
+  compactStatLabel: {
+    color: Theme.colors.textSecondary,
+    fontSize: 10,
+    fontWeight: "800",
+    textTransform: "uppercase",
+  },
+
+  compactDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: Theme.colors.border,
   },
 });

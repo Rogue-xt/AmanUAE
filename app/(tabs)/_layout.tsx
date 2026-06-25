@@ -60,7 +60,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="vehicles"
         options={{
-          title: "Vehicles",
+          title: "My Vehicles",
+          tabBarLabel: "Vehicles",
           tabBarIcon: ({ color }) => (
             <FontAwesome6 name="car-side" size={20} color={color} />
           ),
@@ -70,7 +71,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="vault"
         options={{
-          title: "Vault",
+          title: "Document Vault",
+          tabBarLabel: "Vault",
           tabBarIcon: ({ color, focused }) => (
             <TabIcon name="shield-halved" color={color} focused={focused} />
           ),

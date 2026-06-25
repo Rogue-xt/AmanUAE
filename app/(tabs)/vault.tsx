@@ -294,35 +294,50 @@ export default function VaultScreen() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.scrollContent}
       >
-        <FadeInView delay={0}>
+        {/* <FadeInView delay={0}>
           <ScreenHeader
             kicker="Secure Document Vault"
             title="Document Shield"
             subtitle="Store critical UAE documents, track expiry, and retrieve when needed."
           />
-        </FadeInView>
+        </FadeInView> */}
 
         <FadeInView delay={80}>
-          <View style={styles.heroCard}>
-            <View style={styles.heroIcon}>
+          <View style={styles.compactStatsBar}>
+            <View style={styles.compactStatItem}>
               <FontAwesome6
-                name="shield-halved"
-                size={24}
+                name="folder-open"
+                size={13}
                 color={Theme.colors.primaryGlow}
               />
+              <Text style={styles.compactStatValue}>{documents.length}</Text>
+              <Text style={styles.compactStatLabel}>Total</Text>
             </View>
-            <View style={styles.kpiRow}>
-              <KPICard label="Total" value={documents.length} />
-              <KPICard
-                label="Critical"
-                value={stats.Critical + stats.Expired}
-                accent={Theme.colors.danger}
+
+            <View style={styles.compactDivider} />
+
+            <View style={styles.compactStatItem}>
+              <FontAwesome6
+                name="triangle-exclamation"
+                size={13}
+                color={Theme.colors.danger}
               />
-              <KPICard
-                label="Warning"
-                value={stats.Warning}
-                accent={Theme.colors.warning}
+              <Text style={styles.compactStatValue}>
+                {stats.Critical + stats.Expired}
+              </Text>
+              <Text style={styles.compactStatLabel}>Critical</Text>
+            </View>
+
+            <View style={styles.compactDivider} />
+
+            <View style={styles.compactStatItem}>
+              <FontAwesome6
+                name="clock"
+                size={13}
+                color={Theme.colors.warning}
               />
+              <Text style={styles.compactStatValue}>{stats.Warning}</Text>
+              <Text style={styles.compactStatLabel}>Warning</Text>
             </View>
           </View>
         </FadeInView>
@@ -577,27 +592,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Theme.spacing.xl,
     paddingBottom: 120,
   },
-  heroCard: {
-    backgroundColor: Theme.colors.card,
-    borderRadius: Theme.radius.xxl,
-    padding: Theme.spacing.xl,
-    borderWidth: 1,
-    borderColor: Theme.colors.border,
-    marginBottom: Theme.spacing.lg,
-  },
-  heroIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: Theme.radius.lg,
-    backgroundColor: Theme.colors.primaryMuted,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Theme.spacing.lg,
-  },
-  kpiRow: {
-    flexDirection: "row",
-    gap: Theme.spacing.sm,
-  },
+
   formCard: {
     backgroundColor: Theme.colors.card,
     borderRadius: Theme.radius.xxl,
@@ -1062,11 +1057,47 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
     elevation: 10,
-   
   },
   container: {
     flex: 1,
     position: "relative",
     backgroundColor: Theme.colors.background,
+  },
+  compactStatsBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: Theme.spacing.md,
+  },
+
+  compactStatItem: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+  },
+
+  compactStatValue: {
+    color: Theme.colors.textPrimary,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+
+  compactStatLabel: {
+    color: Theme.colors.textSecondary,
+    fontSize: 10,
+    fontWeight: "800",
+    textTransform: "uppercase",
+  },
+
+  compactDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: Theme.colors.border,
   },
 });
