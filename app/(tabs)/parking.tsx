@@ -12,10 +12,7 @@ import {
 } from "react-native";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { useApp } from "../../src/context/AppContext";
-import {
-  generateParkingSMS,
-  identifyEmirateFromRegion,
-} from "@/src/context/utils/parkingFormatter";
+
 import { Theme } from "@/constants/Theme";
 import { FadeInView } from "@/components/ui/FadeInView";
 import { PremiumVehicleCard } from "@/components/ui/PremiumVehicleCard";
@@ -26,6 +23,7 @@ import {
   SectionHeader,
 } from "@/components/ui/ScreenLayout";
 import { formatEmirate } from "@/components/ui/utils";
+import { generateParkingSMS, identifyEmirateFromRegion } from "@/src/utils/parkingFormatter";
 
 const DURATION_OPTIONS = [
   { value: 1, label: "1h" },
@@ -292,13 +290,13 @@ const smsPreview = useMemo(() => {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.scrollContent}
       >
-        <FadeInView delay={0}>
+        {/* <FadeInView delay={0}>
           <ScreenHeader
             kicker="Smart UAE Parking"
             title="Parking Assistant"
             subtitle="SMS parking across all seven emirates"
           />
-        </FadeInView>
+        </FadeInView> */}
 
         <FadeInView delay={80}>
           <View style={[styles.scanCard, isLocating && styles.scanCardActive]}>

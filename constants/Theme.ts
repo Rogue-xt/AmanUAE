@@ -1,26 +1,26 @@
 export const Theme = {
   colors: {
-    background: "#090b0b",
-    surface: "#121317",
-    card: "#15161A",
-    elevated: "#1C1E24",
-    border: "#2A2D35",
-    borderSubtle: "#1E2028",
+    background: "#F6F6F3",
+    surface: "#FFFFFF",
+    card: "#FFFFFF",
+    elevated: "#F1F1ED",
+    border: "#E3E3DA",
+    borderSubtle: "#EEEEEA",
 
-    primary: "#3B82F6",
-    primaryGlow: "#60A5FA",
-    primaryMuted: "rgba(59, 130, 246, 0.15)",
+    primary: "#FFD60A",
+    primaryGlow: "#FFB703",
+    primaryMuted: "rgba(255, 214, 10, 0.18)",
 
-    success: "#22C55E",
-    successMuted: "rgba(34, 197, 94, 0.12)",
+    success: "#16A34A",
+    successMuted: "rgba(22, 163, 74, 0.12)",
     warning: "#F59E0B",
     warningMuted: "rgba(245, 158, 11, 0.12)",
-    danger: "#EF4444",
-    dangerMuted: "rgba(239, 68, 68, 0.12)",
+    danger: "#DC2626",
+    dangerMuted: "rgba(220, 38, 38, 0.12)",
 
-    textPrimary: "#F8FAFC",
-    textSecondary: "#94A3B8",
-    textMuted: "#64748B",
+    textPrimary: "#0A0A0A",
+    textSecondary: "#4B5563",
+    textMuted: "#6B7280",
   },
 
   spacing: {

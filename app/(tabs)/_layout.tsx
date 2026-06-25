@@ -2,7 +2,6 @@ import React from "react";
 import { Platform, StyleSheet } from "react-native";
 import { Tabs } from "expo-router";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
-import { useClientOnlyValue } from "@/components/useClientOnlyValue";
 import { Theme } from "@/constants/Theme";
 
 function TabIcon({
@@ -28,14 +27,28 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: useClientOnlyValue(false, true),
-        tabBarActiveTintColor: Theme.colors.primaryGlow,
-        tabBarInactiveTintColor: Theme.colors.textMuted,
+        headerStyle: {
+          backgroundColor: Theme.colors.primary,
+        },
+
+        headerTintColor: Theme.colors.textPrimary,
+
+        headerTitleStyle: {
+          color: Theme.colors.textPrimary,
+          fontWeight: "700",
+          fontSize: 18,
+        },
+
+        headerShadowVisible: false,
+
+        sceneStyle: {
+          backgroundColor: Theme.colors.background,
+        },
         tabBarStyle: styles.tabBar,
-        tabBarItemStyle: styles.tabItem,
-        tabBarLabelStyle: styles.tabLabel,
-        tabBarHideOnKeyboard: true,
-        sceneStyle: { backgroundColor: Theme.colors.background },
+
+        tabBarActiveTintColor: Theme.colors.textPrimary,
+        tabBarInactiveTintColor: Theme.colors.textMuted,
+        
       }}
     >
       <Tabs.Screen
@@ -51,7 +64,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="parking"
         options={{
-          title: "Parking",
+          title: "Parking Assistant",
+          tabBarLabel: "Parking",
           tabBarIcon: ({ color, focused }) => (
             <TabIcon name="square-parking" color={color} focused={focused} />
           ),

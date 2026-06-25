@@ -56,14 +56,7 @@ export function ScreenContainer({
   children: React.ReactNode;
   bottomInset?: number;
 }) {
-  const insets = useSafeAreaInsets();
-  const topInset = insets.top || (Platform.OS === "android" ? 24 : 44);
-
-  return (
-    <View style={[styles.screen, { paddingTop: topInset + Theme.spacing.lg }]}>
-      {children}
-    </View>
-  );
+  return <View style={[styles.screen, styles.screenInset]}>{children}</View>;
 }
 
 const styles = StyleSheet.create({
@@ -125,5 +118,8 @@ const styles = StyleSheet.create({
     color: Theme.colors.primaryGlow,
     fontSize: 12,
     fontWeight: "800",
+  },
+  screenInset: {
+    paddingTop: Theme.spacing.md,
   },
 });

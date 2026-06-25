@@ -125,10 +125,10 @@ export default function DashboardScreen() {
         <FadeInView delay={0}>
           <View style={styles.brandRow}>
             <View style={styles.logoBox}>
-              <Text style={styles.logoText}>ZG</Text>
+              <Text style={styles.logoText}>A</Text>
             </View>
             <View style={styles.brandText}>
-              <Text style={styles.brandName}>ZoneGard</Text>
+              <Text style={styles.brandName}>Aman UAE</Text>
               <Text style={styles.brandTagline}>
                 UAE Parking & Document Shield
               </Text>
@@ -301,6 +301,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Theme.spacing.xl,
     paddingBottom: 120,
+    paddingTop: Theme.spacing.sm,
   },
   brandRow: {
     flexDirection: "row",
