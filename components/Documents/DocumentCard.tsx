@@ -20,6 +20,8 @@ type DocumentCardProps = {
   onDelete?: (doc: DocumentRecord) => void;
   onEdit?: (doc: DocumentRecord) => void;
   onRenew?: (doc: DocumentRecord) => void;
+  onLink?: () => void;
+  linkedVehicleName?: string;
 };
 
 const getDaysRemaining = (expiryDate: string) => {
@@ -81,6 +83,7 @@ const formatFileSize = (size?: number) => {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+
 function StatusPill({ status }: { status: Urgency }) {
   return (
     <View style={[styles.statusPill, styles[`status${status}`]]}>
@@ -96,6 +99,8 @@ export function DocumentCard({
   onEdit,
   onRenew,
   onDelete,
+  onLink,
+  linkedVehicleName,
 }: DocumentCardProps) {
   const days = getDaysRemaining(document.expiryDate);
   const urgency = getUrgency(days);
@@ -147,6 +152,17 @@ export function DocumentCard({
             ? `${document.fileName} · ${formatFileSize(document.fileSize)}`
             : "No file attached"}
         </Text>
+        <View style={styles.vehicleBadge}>
+          <FontAwesome6
+            name="car-side"
+            size={12}
+            color={Theme.colors.primaryGlow}
+          />
+
+          <Text style={styles.vehicleBadgeText}>
+            {linkedVehicleName || "Not linked"}
+          </Text>
+        </View>
       </View>
       {/* 
       <View style={styles.actions}>
@@ -247,6 +263,16 @@ export function DocumentCard({
                 color={Theme.colors.textSecondary}
               />
               <Text style={styles.actionText}>Share</Text>
+            </Pressable>
+          )}
+          {onLink && (
+            <Pressable style={styles.actionBtn} onPress={onLink}>
+              <FontAwesome6
+                name="link"
+                size={12}
+                color={Theme.colors.primaryGlow}
+              />
+              <Text style={styles.actionText}>Link</Text>
             </Pressable>
           )}
         </View>
@@ -447,5 +473,23 @@ const styles = StyleSheet.create({
   actionsRow: {
     flexDirection: "row",
     gap: Theme.spacing.sm,
+  },
+  vehicleBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    backgroundColor: Theme.colors.surface,
+    borderRadius: Theme.radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginTop: Theme.spacing.sm,
+    marginBottom: Theme.spacing.md,
+  },
+
+  vehicleBadgeText: {
+    color: Theme.colors.textSecondary,
+    fontSize: 11,
+    fontWeight: "800",
   },
 });

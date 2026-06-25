@@ -41,6 +41,7 @@ import {
 import { DocumentCard } from "@/components/Documents/DocumentCard";
 import { DocumentEditModal } from "@/components/Documents/DocumentEditModal";
 import { DocumentPreviewModal } from "@/components/Documents/DocumentPreviewModal";
+import { DocumentVehicleLinkModal } from "@/components/Documents/DocumentVehicleLinkModal";
 
 const DOCUMENT_TYPES: DocumentRecord["type"][] = [
   "EmiratesID",
@@ -61,8 +62,8 @@ const URGENCY_BORDER: Record<ReturnType<typeof getUrgency>, string> = {
 };
 
 export default function VaultScreen() {
-  const { updateDocument } = useApp();
-  const { documents, vehicles, addDocument, deleteDocument } = useApp();
+  const { documents, vehicles, addDocument, deleteDocument, updateDocument } =
+    useApp();
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
   const [previewDoc, setPreviewDoc] = useState<DocumentRecord | null>(null);
   const [selectedType, setSelectedType] =
@@ -72,6 +73,9 @@ export default function VaultScreen() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isAddDocumentOpen, setIsAddDocumentOpen] = useState(false);
+  const [linkingDocument, setLinkingDocument] = useState<DocumentRecord | null>(
+    null,
+  );
   const [pickedFile, setPickedFile] = useState<{
     name: string;
     uri: string;
@@ -202,6 +206,7 @@ export default function VaultScreen() {
     Alert.alert("Saved", "Document tracker secured in your local vault.");
   };
 
+
   const handleViewDocument = async (doc: DocumentRecord) => {
     if (!doc.fileUri) {
       Alert.alert("No File", "This tracker has no attached document.");
@@ -295,8 +300,6 @@ export default function VaultScreen() {
             title="Document Shield"
             subtitle="Store critical UAE documents, track expiry, and retrieve when needed."
           />
-
-       
         </FadeInView>
 
         <FadeInView delay={80}>
@@ -481,7 +484,6 @@ export default function VaultScreen() {
                     }
                   />
                 </ScrollView>
-              
               </View>
             </View>
           </Modal>
@@ -507,24 +509,45 @@ export default function VaultScreen() {
               </Text>
             </View>
           ) : (
-            sortedDocuments.map((doc, index) => (
-              <FadeInView key={doc.id} delay={280 + index * 40}>
-                <DocumentCard
-                  document={doc}
-                  onView={handleViewDocument}
-                  onShare={handleShareDocument}
-                  onDelete={handleDeleteDocument}
-                  onEdit={handleEditDocument}
-                  onRenew={handleRenewDocument}
-                />
-              </FadeInView>
-            ))
+            sortedDocuments.map((doc, index) => {
+              const linkedVehicle = vehicles.find(
+                (vehicle) => vehicle.id === doc.vehicleId,
+              );
+
+              return (
+                <FadeInView key={doc.id} delay={280 + index * 40}>
+                  <DocumentCard
+                    document={doc}
+                    onView={handleViewDocument}
+                    onShare={handleShareDocument}
+                    onDelete={handleDeleteDocument}
+                    onEdit={handleEditDocument}
+                    onRenew={handleRenewDocument}
+                    onLink={() => setLinkingDocument(doc)}
+                    linkedVehicleName={linkedVehicle?.label}
+                  />
+                </FadeInView>
+              );
+            })
           )}
         </FadeInView>
       </ScrollView>
       <DocumentPreviewModal
         document={previewDoc}
         onClose={() => setPreviewDoc(null)}
+      />
+      <DocumentVehicleLinkModal
+        visible={!!linkingDocument}
+        document={linkingDocument}
+        vehicles={vehicles}
+        onClose={() => setLinkingDocument(null)}
+        onLink={async (docId, vehicleId) => {
+          await updateDocument(docId, {
+            vehicleId: vehicleId ?? "",
+          });
+
+          setLinkingDocument(null);
+        }}
       />
       <DocumentEditModal
         visible={!!editingDocument}

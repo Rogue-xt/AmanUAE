@@ -14,6 +14,7 @@ import { DocumentEditModal } from "@/components/Documents/DocumentEditModal";
 import { Image } from "expo-image";
 import { Stack } from "expo-router";
 import { VehicleEditModal } from "@/components/vehicles/VehicleEditModal";
+import { DocumentVehicleLinkModal } from "@/components/Documents/DocumentVehicleLinkModal";
 const getDaysRemaining = (expiryDate: string) => {
   const today = new Date();
   const expiry = new Date(`${expiryDate}T00:00:00`);
@@ -44,6 +45,9 @@ export default function VehicleDetailsScreen() {
   const [editLabel, setEditLabel] = useState(vehicle?.label || "");
   const [editEmirate, setEditEmirate] = useState(vehicle?.emirate || "Dubai");
   const [editPlateCode, setEditPlateCode] = useState(vehicle?.plateCode || "");
+  const [linkingDocument, setLinkingDocument] = useState<DocumentRecord | null>(
+    null,
+  );
   const [editPlateNumber, setEditPlateNumber] = useState(
     vehicle?.plateNumber || "",
   );
@@ -315,6 +319,8 @@ export default function VehicleDetailsScreen() {
                 onEdit={() => handleEditDocument(doc)}
                 onRenew={() => handleRenewDocument(doc)}
                 onDelete={handleDeleteDocument}
+                onLink={() => setLinkingDocument(doc)}
+                linkedVehicleName={vehicle.label}
               />
             ))
           )}
@@ -328,6 +334,19 @@ export default function VehicleDetailsScreen() {
             mode={documentEditMode}
             onClose={() => setEditingDocument(null)}
             onSave={handleSaveDocumentEdit}
+          />
+          <DocumentVehicleLinkModal
+            visible={!!linkingDocument}
+            document={linkingDocument}
+            vehicles={vehicles}
+            onClose={() => setLinkingDocument(null)}
+            onLink={async (docId, vehicleId) => {
+              await updateDocument(docId, {
+                vehicleId: vehicleId ?? "",
+              });
+
+              setLinkingDocument(null);
+            }}
           />
           <VehicleEditModal
             visible={isEditVehicleOpen}
