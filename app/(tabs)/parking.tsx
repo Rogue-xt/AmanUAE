@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { useApp } from "../../src/context/AppContext";
-
+import { router } from "expo-router";
 import { Theme } from "@/constants/Theme";
 import { FadeInView } from "@/components/ui/FadeInView";
 import { PremiumVehicleCard } from "@/components/ui/PremiumVehicleCard";
@@ -103,7 +103,8 @@ const requiresZoneCode = (emirate?: string) => {
   return !!emirate && ZONE_REQUIRED_EMIRATES.includes(emirate);
 };
 export default function ParkingScreen() {
-  const { vehicles, activeTicket, startParkingSession } = useApp();
+const { vehicles, activeTicket, startParkingSession, parkingSessions } =
+  useApp();
 
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
   const [selectedParkingEmirate, setSelectedParkingEmirate] =
@@ -261,9 +262,13 @@ const smsPreview = useMemo(() => {
       const expiryTime = Date.now() + durationInMilliseconds;
 
       await startParkingSession({
+        vehicleId: activeVehicle.id,
         vehicleLabel: activeVehicle.label,
         plateDetails: `${activeVehicle.plateCode} ${activeVehicle.plateNumber}`,
         parkingEmirate: parkingLocation,
+        zoneCode: zoneCode.trim(),
+        durationHours: parkingRule.requiresDuration ? duration : 1,
+        startedAt: Date.now(),
         expiryTimestamp: expiryTime,
       });
     } else {
@@ -328,6 +333,35 @@ const smsPreview = useMemo(() => {
               style={styles.scanButton}
             />
           </View>
+          <FadeInView delay={120}>
+            <TouchableOpacity
+              style={styles.sessionsCard}
+              onPress={() => router.push("/parking-sessions")}
+            >
+              <View style={styles.sessionsIcon}>
+                <FontAwesome6
+                  name="clock-rotate-left"
+                  size={18}
+                  color={Theme.colors.textPrimary}
+                />
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sessionsTitle}>Parking Sessions</Text>
+                <Text style={styles.sessionsSub}>
+                  {parkingSessions.length > 0
+                    ? `${parkingSessions.length} saved sessions`
+                    : "Review previous parking activity"}
+                </Text>
+              </View>
+
+              <FontAwesome6
+                name="chevron-right"
+                size={14}
+                color={Theme.colors.textMuted}
+              />
+            </TouchableOpacity>
+          </FadeInView>
         </FadeInView>
 
         <FadeInView delay={160}>
@@ -872,5 +906,36 @@ const styles = StyleSheet.create({
   generateButtonDisabled: {
     opacity: 0.45,
   },
-
+  // new style
+  sessionsCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Theme.spacing.md,
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.xl,
+    padding: Theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    marginBottom: Theme.spacing.xl,
+    ...Theme.shadow.card,
+  },
+  sessionsIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    backgroundColor: Theme.colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sessionsTitle: {
+    color: Theme.colors.textPrimary,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  sessionsSub: {
+    color: Theme.colors.textSecondary,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 3,
+  },
 });

@@ -54,18 +54,45 @@ export interface ActiveTicket {
   expiryTimestamp: number; // Unix timestamp in milliseconds when the ticket expires
 }
 
+export interface ParkingSession {
+  id: string;
+  vehicleId?: string;
+  vehicleLabel: string;
+  plateDetails: string;
+  parkingEmirate: string;
+  zoneCode?: string;
+  durationHours?: number;
+  startedAt: number;
+  expiryTimestamp: number;
+  endedAt?: number;
+  status: "active" | "completed" | "expired";
+}export interface StartParkingSessionInput {
+  vehicleId?: string;
+  vehicleLabel: string;
+  plateDetails: string;
+
+  parkingEmirate: string;
+
+  zoneCode?: string;
+  durationHours?: number;
+
+  startedAt: number;
+  expiryTimestamp: number;
+}
 // 2. Define exactly what functions and data are available globally
 interface AppContextType {
   vehicles: VehicleProfile[];
   documents: DocumentRecord[];
-  activeTicket: ActiveTicket | null; // <── Add this line
+  activeTicket: ActiveTicket | null;
   isLoading: boolean;
   addVehicle: (vehicle: Omit<VehicleProfile, "id">) => Promise<void>;
   deleteVehicle: (id: string) => Promise<void>;
   addDocument: (doc: Omit<DocumentRecord, "id" | "createdAt">) => Promise<void>;
   deleteDocument: (id: string) => Promise<void>;
-  startParkingSession: (ticket: Omit<ActiveTicket, "id">) => Promise<void>; // <── Add this line
-  clearParkingSession: () => Promise<void>; // <── Add this line
+  startParkingSession: (ticket: StartParkingSessionInput) => Promise<void>;
+  clearParkingSession: () => Promise<void>;
+  parkingSessions: ParkingSession[];
+  clearParkingHistory: () => Promise<void>;
   updateVehicle: (
     id: string,
     payload: Partial<Omit<VehicleProfile, "id">>,
@@ -84,6 +111,7 @@ const VEHICLES_STORAGE_KEY = "@zonegard_vehicles";
 const DOCUMENTS_STORAGE_KEY = "@zonegard_documents";
 const TICKET_STORAGE_KEY = "@zonegard_active_ticket";
 const TICKET_NOTIFICATION_KEY = "@zonegard_ticket_notification_id";
+const PARKING_SESSIONS_STORAGE_KEY = "@zonegard_parking_sessions";
 
 
 // const requestNotificationPermission = async () => {
@@ -101,20 +129,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [activeTicket, setActiveTicket] = useState<ActiveTicket | null>(null);
+  const [parkingSessions, setParkingSessions] = useState<ParkingSession[]>([]);
 
   // 3. Hydration Phase: Load everything from local device memory on app bootup
   // C. Update your initial useEffect hydration block to pull active tickets on bootup
   useEffect(() => {
     const loadStoredData = async () => {
       try {
-        const [storedVehicles, storedDocs, storedTicket] = await Promise.all([
-          AsyncStorage.getItem(VEHICLES_STORAGE_KEY),
-          AsyncStorage.getItem(DOCUMENTS_STORAGE_KEY),
-          AsyncStorage.getItem(TICKET_STORAGE_KEY), // <── Add this call
-        ]);
+     const [storedVehicles, storedDocs, storedTicket, storedParkingSessions] =
+       await Promise.all([
+         AsyncStorage.getItem(VEHICLES_STORAGE_KEY),
+         AsyncStorage.getItem(DOCUMENTS_STORAGE_KEY),
+         AsyncStorage.getItem(TICKET_STORAGE_KEY),
+         AsyncStorage.getItem(PARKING_SESSIONS_STORAGE_KEY),
+       ]);
 
         if (storedVehicles) setVehicles(JSON.parse(storedVehicles));
         if (storedDocs) setDocuments(JSON.parse(storedDocs));
+        if (storedParkingSessions) {
+          const parsedSessions: ParkingSession[] = JSON.parse(
+            storedParkingSessions,
+          );
+
+          const normalizedSessions = parsedSessions.map((session) =>
+            session.status === "active" && session.expiryTimestamp <= Date.now()
+              ? { ...session, status: "expired" as const }
+              : session,
+          );
+
+          setParkingSessions(normalizedSessions);
+
+          await AsyncStorage.setItem(
+            PARKING_SESSIONS_STORAGE_KEY,
+            JSON.stringify(normalizedSessions),
+          );
+        }
 
         // If a ticket exists, check if it already expired while the app was closed
         if (storedTicket) {
@@ -137,57 +186,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   // D. Add the worker dispatcher functions to start and clear active countdown values
-  const startParkingSession = async (newTicket: Omit<ActiveTicket, "id">) => {
-    try {
-      const completeTicket: ActiveTicket = {
-        ...newTicket,
-        id: Date.now().toString(),
-      };
+const startParkingSession = async (newTicket: StartParkingSessionInput) => {
+  try {
+    const startedAt = newTicket.startedAt ?? Date.now();
 
-      //  const oldNotificationId = await AsyncStorage.getItem(
-      //    TICKET_NOTIFICATION_KEY,
-      //  );
+    // const completeTicket: ActiveTicket = {
+    //   ...newTicket,
+    //   id: Date.now().toString(),
+    // };
+    const completeTicket: ActiveTicket = {
+      id: Date.now().toString(),
 
-      //  if (oldNotificationId) {
-      //    await Notifications.cancelScheduledNotificationAsync(oldNotificationId);
-      //    await AsyncStorage.removeItem(TICKET_NOTIFICATION_KEY);
-      //  }
+      vehicleLabel: newTicket.vehicleLabel,
+      plateDetails: newTicket.plateDetails,
+      parkingEmirate: newTicket.parkingEmirate,
 
-      //  const hasPermission = await requestNotificationPermission();
+      expiryTimestamp: newTicket.expiryTimestamp,
+    };
 
-      //  if (hasPermission) {
-      // //    const triggerTime = completeTicket.expiryTimestamp - 10 * 60 * 1000;
-      // const triggerTime = Date.now() + 30 * 1000; // for testing only, remove after
-      //    const secondsUntilAlert = Math.floor((triggerTime - Date.now()) / 1000);
+    const sessionRecord: ParkingSession = {
+      id: completeTicket.id,
+      vehicleId: newTicket.vehicleId,
+      vehicleLabel: newTicket.vehicleLabel,
+      plateDetails: newTicket.plateDetails,
+      parkingEmirate: newTicket.parkingEmirate,
+      zoneCode: newTicket.zoneCode,
+      durationHours: newTicket.durationHours,
+      startedAt,
+      expiryTimestamp: newTicket.expiryTimestamp,
+      status: "active",
+    };
 
-      //    if (secondsUntilAlert > 0) {
-      //      const notificationId = await Notifications.scheduleNotificationAsync({
-      //        content: {
-      //          title: "Parking expires soon",
-      //          body: `${completeTicket.vehicleLabel} expires in 10 minutes.`,
-      //          sound: true,
-      //        },
-      //        trigger: {
-      //          seconds: secondsUntilAlert,
-      //        },
-      //      });
+    const updatedSessions = [sessionRecord, ...parkingSessions];
 
-      //      await AsyncStorage.setItem(TICKET_NOTIFICATION_KEY, notificationId);
-      //    }
-      //  }
+    setActiveTicket(completeTicket);
+    setParkingSessions(updatedSessions);
 
-      setActiveTicket(completeTicket);
-
-      await AsyncStorage.setItem(
-        TICKET_STORAGE_KEY,
-        JSON.stringify(completeTicket),
-      );
-    } catch (error) {
-      console.error("Failed to initialize tracking countdown layer:", error);
-    }
-  };
+    await AsyncStorage.multiSet([
+      [TICKET_STORAGE_KEY, JSON.stringify(completeTicket)],
+      [PARKING_SESSIONS_STORAGE_KEY, JSON.stringify(updatedSessions)],
+    ]);
+  } catch (error) {
+    console.error("Failed to initialize tracking countdown layer:", error);
+  }
+};
   const clearParkingSession = async () => {
-    try {
+    
       //   const notificationId = await AsyncStorage.getItem(
       //     TICKET_NOTIFICATION_KEY,
       //   );
@@ -197,11 +241,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       //     await AsyncStorage.removeItem(TICKET_NOTIFICATION_KEY);
       //   }
 
-      setActiveTicket(null);
-      await AsyncStorage.removeItem(TICKET_STORAGE_KEY);
-    } catch (error) {
-      console.error("Failed to flush active tracking matrix session:", error);
-    }
+ try {
+   if (activeTicket) {
+     const now = Date.now();
+
+     const updatedSessions = parkingSessions.map((session) =>
+       session.id === activeTicket.id
+         ? {
+             ...session,
+             status:
+               session.expiryTimestamp <= now
+                 ? ("expired" as const)
+                 : ("completed" as const),
+             endedAt: now,
+           }
+         : session,
+     );
+
+     setParkingSessions(updatedSessions);
+
+     await AsyncStorage.setItem(
+       PARKING_SESSIONS_STORAGE_KEY,
+       JSON.stringify(updatedSessions),
+     );
+   }
+
+   setActiveTicket(null);
+   await AsyncStorage.removeItem(TICKET_STORAGE_KEY);
+ } catch (error) {
+   console.error("Failed to flush active tracking matrix session:", error);
+ }
   };
 
   // 4. Vehicle Operations with Auto-Save Flushing
@@ -318,6 +387,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const clearParkingHistory = async () => {
+    try {
+      setParkingSessions([]);
+      await AsyncStorage.removeItem(PARKING_SESSIONS_STORAGE_KEY);
+    } catch (error) {
+      console.error("Failed to clear parking history:", error);
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -333,6 +411,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         clearParkingSession,
         updateVehicle,
         updateDocument,
+        parkingSessions,
+        clearParkingHistory,
       }}
     >
       {children}

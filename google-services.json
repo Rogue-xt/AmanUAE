@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "599396470801",
+    "project_id": "zonegard-48542",
+    "storage_bucket": "zonegard-48542.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:599396470801:android:724582006d2ac5fa72e1b0",
+        "android_client_info": {
+          "package_name": "com.rithik.zonegard"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyChK2s3zsRaeQ-ueGnAkGACr_EXU-RkV5Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

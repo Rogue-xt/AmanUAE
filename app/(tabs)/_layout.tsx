@@ -1,8 +1,8 @@
 import React from "react";
-import { Platform, StyleSheet } from "react-native";
-import { Tabs } from "expo-router";
+import { Platform, StyleSheet, Pressable } from "react-native";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { Theme } from "@/constants/Theme";
+import { Tabs, router } from "expo-router";
 
 function TabIcon({
   name,
@@ -40,6 +40,26 @@ export default function TabLayout() {
         },
 
         headerShadowVisible: false,
+        headerRight: () => (
+          <Pressable
+            onPress={() => router.push("/settings")}
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 19,
+              backgroundColor: "rgba(255,255,255,0.35)",
+              alignItems: "center",
+              justifyContent: "center",
+              marginRight: 12,
+            }}
+          >
+            <FontAwesome6
+              name="user"
+              size={16}
+              color={Theme.colors.textPrimary}
+            />
+          </Pressable>
+        ),
 
         sceneStyle: {
           backgroundColor: Theme.colors.background,
@@ -48,7 +68,6 @@ export default function TabLayout() {
 
         tabBarActiveTintColor: Theme.colors.textPrimary,
         tabBarInactiveTintColor: Theme.colors.textMuted,
-        
       }}
     >
       <Tabs.Screen

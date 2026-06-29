@@ -1,0 +1,320 @@
+ZONEGARD PROJECT CONTEXT — CURRENT HANDOFF
+Date: 2026-06-25
+
+PROJECT
+- App: ZoneGard
+- Stack: React Native + Expo Router + TypeScript
+- Storage so far: AsyncStorage local-first
+- New direction: add Firebase Auth + Firestore cloud sync so user data survives uninstall/reinstall.
+- Firebase package installed by user.
+- Firebase config file already created by user.
+
+CORE MODULES / ROUTES
+- app/(tabs)/dashboard.tsx
+- app/(tabs)/parking.tsx
+- app/(tabs)/vault.tsx
+- app/(tabs)/vehicles.tsx
+- app/vehicle/[id].tsx
+- app/(tabs)/_layout.tsx
+- app/_layout.tsx
+
+CURRENT TAB STRUCTURE
+- Dashboard
+- Parking
+- Vehicles
+- Vault
+
+RECENT ROUTE/NAV NOTES
+- Top nav title for tab screens controlled in app/(tabs)/_layout.tsx.
+- Use title for top navbar and tabBarLabel for bottom tab label when different labels are needed.
+  Example:
+  <Tabs.Screen name="vault" options={{ title: "Document Vault", tabBarLabel: "Vault" }} />
+- Active tab label color issue: tabBarActiveTintColor affects both icon and label. To keep icon yellow but active label black, use tabBarLabel as a custom Text function per tab.
+- ScreenContainer safe-area issue fixed/reduced: native tab header already handles top safe area, so ScreenContainer should not add full useSafeAreaInsets top padding. Use small fixed padding instead, e.g. paddingTop: Theme.spacing.md.
+
+THEME
+Current theme is being tested as light futuristic white/yellow/black.
+Suggested light color direction:
+- background: #F6F6F3
+- surface/card: #FFFFFF
+- elevated: #F1F1ED
+- border: #E3E3DA
+- primary: #FFD60A
+- primaryGlow: #FFB703
+- textPrimary: #0A0A0A
+- textSecondary: #4B5563
+- textMuted: #6B7280
+Notes:
+- Some hardcoded #fff may need replacing with Theme.colors.textPrimary.
+- Header/tab styles need to use Theme colors manually in _layout.tsx.
+
+GLOBAL CONTEXT — src/context/AppContext.tsx
+Models currently expected:
+VehicleProfile:
+- id
+- label
+- emirate: Dubai | AbuDhabi | Sharjah | Ajman | RasAlKhaimah | UmmAlQuwain | Fujairah
+- plateCode
+- plateNumber
+- imageUri?: string
+- imageName?: string
+
+DocumentRecord:
+- id
+- type: EmiratesID | Mulkiya | DrivingLicense | Ejari | Passport | Visa | Insurance | Other
+- title
+- expiryDate
+- vehicleId?: string
+- fileName?: string
+- fileUri?: string
+- mimeType?: string
+- fileSize?: number
+- createdAt
+
+ActiveTicket:
+- id
+- vehicleLabel
+- plateDetails
+- parkingEmirate
+- expiryTimestamp
+
+Context functions expected:
+- addVehicle
+- updateVehicle
+- deleteVehicle
+- addDocument
+- updateDocument
+- deleteDocument
+- startParkingSession
+- clearParkingSession
+
+IMPORTANT ARCHITECTURE DECISIONS
+1. Vehicles page is list/management entry point.
+   - Add Vehicle happens here.
+   - Vehicle cards show View/Edit.
+   - Delete should be on vehicle details page, not list, to reduce accidental destructive actions.
+
+2. Vehicle details page is the main vehicle workspace.
+   - Shows vehicle image, plate, emirate.
+   - Edit Vehicle implemented using reusable VehicleEditModal.
+   - Delete Vehicle implemented/desired here.
+   - Shows linked documents.
+   - Document actions should work here: View, Share, Edit, Renew, Vehicle Link/Unlink, Delete.
+   - Nav title should show vehicle label using <Stack.Screen options={{ title: vehicle?.label || "Vehicle Details" }} />.
+
+3. DocumentEditModal should stay focused only on document fields.
+   - Title
+   - Expiry date with DateTimePicker
+   - Replace/Renew file
+   - It should NOT handle vehicle link/unlink.
+
+4. DocumentVehicleLinkModal is separate and reusable.
+   - Used in Vault.
+   - Used in Vehicle Details.
+   - Future: Document Details page.
+
+REUSABLE COMPONENTS CREATED / UPDATED
+1. components/vehicles/VehicleEditModal.tsx
+Purpose:
+- Reusable Add/Edit Vehicle modal.
+Used by:
+- app/(tabs)/vehicles.tsx for Add/Edit
+- app/vehicle/[id].tsx for Edit
+Props:
+- visible
+- mode: "add" | "edit"
+- vehicle?: VehicleProfile | null
+- onClose
+- onSave(payload: Omit<VehicleProfile, "id">)
+Features:
+- Label input
+- Emirate segmented chips
+- Plate code + plate number
+- Image picker using expo-image-picker
+- Saves imageUri/imageName
+
+2. components/documents/DocumentVehicleLinkModal.tsx
+Purpose:
+- Reusable modal to link/unlink a document to a vehicle.
+Props:
+- visible
+- document: DocumentRecord | null
+- vehicles: VehicleProfile[]
+- onClose
+- onLink(documentId: string, vehicleId: string | null)
+Behavior:
+- Preselects current document.vehicleId
+- Shows current link
+- Lists vehicles
+- Unlink sets selectedVehicleId to null
+- Save calls onLink
+Usage in Vault:
+<DocumentVehicleLinkModal
+  visible={!!linkingDocument}
+  document={linkingDocument}
+  vehicles={vehicles}
+  onClose={() => setLinkingDocument(null)}
+  onLink={async (docId, vehicleId) => {
+    await updateDocument(docId, { vehicleId: vehicleId ?? "" });
+    setLinkingDocument(null);
+  }}
+/>
+
+3. components/documents/DocumentCard.tsx
+Updated/should be updated:
+Props added:
+- onLink?: () => void
+- linkedVehicleName?: string
+Card should show current vehicle link badge:
+- Linked to Nissan
+- Not linked to any vehicle
+Actions include Vehicle/Link button.
+
+VAULT MODULE STATUS
+- Add document form moved to bottom-sheet modal.
+- FAB opens Add Document modal.
+- FAB hides when modal is open.
+- DocumentPreviewModal and DocumentEditModal reused.
+- Date picker added to DocumentEditModal.
+- DocumentVehicleLinkModal wired or in progress.
+- In vault.tsx sortedDocuments.map must use block body to define linkedVehicle:
+  sortedDocuments.map((doc, index) => {
+    const linkedVehicle = vehicles.find((vehicle) => vehicle.id === doc.vehicleId);
+    return (... <DocumentCard linkedVehicleName={linkedVehicle?.label} /> ...);
+  })
+
+VEHICLES MODULE STATUS
+- app/(tabs)/vehicles.tsx created.
+- Vehicle form refactored out into VehicleEditModal.
+- Old modal imports/states/styles should be removed from vehicles.tsx.
+- vehicles.tsx should keep only:
+  - isAddVehicleOpen
+  - vehicleMode
+  - editingVehicle
+  - handleSaveVehicle(payload)
+  - openAddVehicle()
+  - openEditVehicle(vehicle)
+- Vehicle cards use PremiumVehicleCard with imageUri/imageName.
+- Status card was reduced to compact stats bar because it took too much screen space.
+
+PREMIUM VEHICLE CARD STATUS
+- components/ui/PremiumVehicleCard.tsx updated for image support.
+- It uses separate props, not a single vehicle prop:
+  - label
+  - emirate
+  - plateCode
+  - plateNumber
+  - imageUri
+  - imageName
+  - linkedDocuments
+  - onView
+  - onEdit
+  - onDelete optional
+- Better design chosen: image thumbnail on left, vehicle info on right, instead of cropped banner.
+- Compact card width may need to be around 260 for parking horizontal selector.
+
+PARKING MODULE STATUS
+- app/(tabs)/parking.tsx uses PremiumVehicleCard for vehicle selection.
+- Add image props to PremiumVehicleCard usage:
+  imageUri={car.imageUri}
+  imageName={car.imageName}
+- Parking logic principle:
+  Plate emirate = activeVehicle.emirate
+  Parking emirate = selected parking emirate/current parking location
+  SMS rules depend on parking emirate, not vehicle registration emirate.
+- Notifications not implemented yet.
+
+VEHICLE DETAILS STATUS
+- app/vehicle/[id].tsx shows vehicle image fallback.
+- Edit Vehicle implemented using VehicleEditModal.
+- Delete Vehicle should be here.
+- Buttons were changed to a modern single-line row: Edit + Delete.
+- Document cards shown for linked documents.
+- DocumentVehicleLinkModal should be reused here too.
+
+AUTH / FIREBASE NEXT MODULE
+User requested authentication so data is not lost when app is uninstalled.
+Decision: Use Firebase, not Clerk.
+Reason:
+- Firebase Auth + Firestore + future Storage/FCM are a complete mobile backend.
+- Clerk is auth only; would still need database/storage separately.
+- Firebase Spark plan should be enough for MVP.
+- Keep AsyncStorage as local cache; use Firestore as cloud backup/restore.
+
+Firebase current status:
+- firebase package installed.
+- Firebase project/config file created.
+- Next step: create AuthContext and gate app.
+
+NEXT AUTH IMPLEMENTATION PLAN
+1. Create src/context/AuthContext.tsx
+Handles:
+- user
+- isAuthLoading
+- login(email, password)
+- signup(email, password)
+- logout()
+Use Firebase Auth functions:
+- onAuthStateChanged
+- signInWithEmailAndPassword
+- createUserWithEmailAndPassword
+- signOut
+
+Ready code previously suggested:
+import React, { createContext, useContext, useEffect, useState } from "react";
+import {
+  User,
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+} from "firebase/auth";
+import { auth } from "@/src/firebase/firebaseConfig";
+
+2. Wrap app with AuthProvider in app/_layout.tsx.
+3. Create login/signup screen or AuthGate.
+4. If user not authenticated, show login screen.
+5. If authenticated, show app tabs.
+6. After auth works, add Firestore sync.
+
+RECOMMENDED AUTH UX
+- Start with Email/Password only.
+- Login screen should include:
+  - Email
+  - Password
+  - Login button
+  - Create account toggle
+- After login, route to tabs.
+- Add logout button later in settings/profile, not main dashboard.
+
+FIRESTORE DATA STRUCTURE RECOMMENDED
+users/{uid}
+  vehicles/{vehicleId}
+  documents/{documentId}
+  activeTicket/current
+
+SYNC STRATEGY
+Keep AsyncStorage + AppContext as source of app UI state.
+Add Firestore backup layer:
+- On login: load cloud data, merge/restore local data.
+- On add/edit/delete: update AsyncStorage immediately, then sync Firestore.
+- Avoid file cloud backup initially. Document/image files can remain local for MVP; later add Firebase Storage.
+
+PENDING MODULES AFTER AUTH
+1. Firestore sync for vehicles/documents/activeTicket.
+2. Parking local notifications:
+   - 10 minutes before expiry
+   - 5 minutes before expiry
+   - expired
+3. Document expiry local notifications:
+   - 90 / 30 / 14 / 7 / 1 day / expired
+4. APK/dev build workflow.
+5. Optional Firebase Storage for backing up attached document files and vehicle images.
+
+IMPORTANT DEVELOPMENT PRINCIPLES GOING FORWARD
+- Do not duplicate modals. Reuse VehicleEditModal and DocumentVehicleLinkModal.
+- Do not put vehicle link/unlink inside DocumentEditModal.
+- Keep destructive vehicle delete on vehicle details page.
+- Keep Dashboard summary-only.
+- Keep Vehicles page list-first and compact.
+- Keep AsyncStorage even after Firebase; Firebase is backup/sync, not replacement at first.
