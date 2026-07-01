@@ -16,7 +16,7 @@ import { useApp } from "@/src/context/AppContext";
 
 export default function SettingsScreen() {
   const { user, logout } = useAuth();
-  const { vehicles, documents } = useApp();
+  const { vehicles, documents, resetAppState } = useApp();
 
   const handleLogout = () => {
     Alert.alert("Logout", "Do you want to logout from ZoneGard?", [
@@ -25,6 +25,7 @@ export default function SettingsScreen() {
         text: "Logout",
         style: "destructive",
         onPress: async () => {
+            resetAppState();
           await logout();
           router.replace("/auth");
         },

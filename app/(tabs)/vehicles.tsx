@@ -179,7 +179,7 @@ export default function VehiclesScreen() {
                 <FadeInView key={vehicle.id} delay={200 + index * 50}>
                   <PremiumVehicleCard
                     key={vehicle.id}
-                    imageUri={vehicle.imageUri}
+                    imageUri={vehicle.imageUrl || vehicle.imageUri}
                     imageName={vehicle.imageName}
                     label={vehicle.label}
                     emirate={vehicle.emirate}

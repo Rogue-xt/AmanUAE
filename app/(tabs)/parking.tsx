@@ -3,6 +3,7 @@ import * as Location from "expo-location";
 import React, { useMemo, useState } from "react";
 import {
   Alert,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -526,13 +527,31 @@ const smsPreview = useMemo(() => {
                 />
                 <View style={styles.durationRow}>
                   {DURATION_OPTIONS.map((opt) => (
-                    <PrimaryButton
+                    // <PrimaryButton
+                    //   key={opt.value}
+                    //   label={opt.label}
+                    //   onPress={() => setDuration(opt.value)}
+                    //   variant={duration === opt.value ? "primary" : "ghost"}
+                    //   style={styles.durationBtn}
+                    // />
+                    <Pressable
                       key={opt.value}
-                      label={opt.label}
                       onPress={() => setDuration(opt.value)}
-                      variant={duration === opt.value ? "primary" : "ghost"}
-                      style={styles.durationBtn}
-                    />
+                      style={[
+                        styles.durationBtn,
+                        duration === opt.value && styles.durationBtnActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.durationBtnText,
+                          duration === opt.value &&
+                            styles.durationBtnTextActive,
+                        ]}
+                      >
+                        {opt.label}
+                      </Text>
+                    </Pressable>
                   ))}
                 </View>
               </View>
@@ -743,10 +762,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: Theme.spacing.sm,
   },
-  durationBtn: {
-    flex: 1,
-    paddingVertical: Theme.spacing.md,
-  },
+  // durationBtn: {
+  //   flex: 1,
+  //   paddingVertical: Theme.spacing.md,
+  // },
   previewCard: {
     backgroundColor: Theme.colors.elevated,
     borderRadius: Theme.radius.xl,
@@ -937,5 +956,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     marginTop: 3,
+  },
+  //custom hr button
+  durationBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Theme.colors.surface,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+
+  durationBtnActive: {
+    backgroundColor: Theme.colors.primary,
+    borderColor: Theme.colors.primary,
+  },
+
+  durationBtnText: {
+    color: Theme.colors.textSecondary,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+
+  durationBtnTextActive: {
+    color: "#000000",
   },
 });

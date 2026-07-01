@@ -41,7 +41,8 @@ export function PrimaryButton({
       ]}
     >
       {variant === "primary" && <View style={styles.gradientOverlay} />}
-      {icon}
+      {/* {icon} */}
+      {icon && <View style={{ zIndex: 2, elevation: 2 }}>{icon}</View>}
       <Text
         style={[
           styles.label,
@@ -71,11 +72,18 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.primary,
     ...Theme.shadow.glow,
   },
+  // gradientOverlay: {
+  //   ...StyleSheet.absoluteFillObject,
+  //   backgroundColor: Theme.colors.primaryGlow,
+  //   opacity: 0.25,
+  //   borderRadius: Theme.radius.lg,
+  // },
   gradientOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: Theme.colors.primaryGlow,
     opacity: 0.25,
     borderRadius: Theme.radius.lg,
+    zIndex: 0,
   },
   success: {
     backgroundColor: Theme.colors.success,
@@ -97,11 +105,18 @@ const styles = StyleSheet.create({
     opacity: 0.88,
     transform: [{ scale: 0.98 }],
   },
+  // label: {
+  //   color: Theme.colors.textPrimary,
+  //   fontSize: 15,
+  //   fontWeight: "800",
+  //   zIndex: 1,
+  // },
   label: {
     color: Theme.colors.textPrimary,
     fontSize: 15,
     fontWeight: "800",
-    zIndex: 1,
+    zIndex: 2,
+    elevation: 2,
   },
   ghostLabel: {
     color: Theme.colors.textSecondary,

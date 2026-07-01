@@ -20,22 +20,32 @@ export type CloudBackup = {
   parkingSessions: ParkingSession[];
   activeTicket: ActiveTicket | null;
 };
+function removeUndefinedFields<T extends Record<string, any>>(data: T): T {
+  return Object.fromEntries(
+    Object.entries(data).filter(([, value]) => value !== undefined),
+  ) as T;
+}
 
 const userDoc = (uid: string) => doc(db, "users", uid);
 
 export async function saveVehicleToCloud(uid: string, vehicle: VehicleProfile) {
-  await setDoc(doc(userDoc(uid), "vehicles", vehicle.id), vehicle);
-}
+  const ref = doc(db, "users", uid, "vehicles", vehicle.id);
 
+  console.log("Saving vehicle to:", ref.path);
+
+  await setDoc(ref, removeUndefinedFields(vehicle));
+}
 export async function deleteVehicleFromCloud(uid: string, vehicleId: string) {
   await deleteDoc(doc(userDoc(uid), "vehicles", vehicleId));
 }
-
 export async function saveDocumentToCloud(
   uid: string,
   documentData: DocumentRecord,
 ) {
-  await setDoc(doc(userDoc(uid), "documents", documentData.id), documentData);
+  await setDoc(
+    doc(userDoc(uid), "documents", documentData.id),
+    removeUndefinedFields(documentData),
+  );
 }
 
 export async function deleteDocumentFromCloud(uid: string, documentId: string) {
@@ -46,7 +56,10 @@ export async function saveParkingSessionToCloud(
   uid: string,
   session: ParkingSession,
 ) {
-  await setDoc(doc(userDoc(uid), "parkingSessions", session.id), session);
+  await setDoc(
+    doc(userDoc(uid), "parkingSessions", session.id),
+    removeUndefinedFields(session),
+  );
 }
 
 export async function saveActiveTicketToCloud(

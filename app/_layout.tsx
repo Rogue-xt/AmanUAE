@@ -14,6 +14,7 @@ import { useColorScheme } from "@/components/useColorScheme";
 import { AppProvider } from "../src/context/AppContext";
 import { AuthProvider, useAuth } from "../src/context/AuthContext";
 import { useCloudSync } from "@/src/hooks/useCloudSync";
+import { requestNotificationPermission } from "@/src/services/notificationService";
 
 export { ErrorBoundary } from "expo-router";
 
@@ -33,11 +34,15 @@ export default function RootLayout() {
     if (error) throw error;
   }, [error]);
 
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
+useEffect(() => {
+  if (loaded) {
+    SplashScreen.hideAsync();
+  }
+}, [loaded]);
+
+useEffect(() => {
+  requestNotificationPermission();
+}, []);
 
   if (!loaded) {
     return null;

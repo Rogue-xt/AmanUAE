@@ -203,9 +203,9 @@ export default function VehicleDetailsScreen() {
       >
         <View style={styles.heroCard}>
           <View style={styles.carVisual}>
-            {vehicle.imageUri ? (
+            {vehicle.imageUrl || vehicle.imageUri ? (
               <Image
-                source={{ uri: vehicle.imageUri }}
+                source={{ uri: vehicle.imageUrl || vehicle.imageUri }}
                 style={styles.vehicleHeroImage}
                 contentFit="cover"
               />
@@ -353,7 +353,10 @@ export default function VehicleDetailsScreen() {
             mode="edit"
             vehicle={vehicle}
             onClose={() => setIsEditVehicleOpen(false)}
-            onSave={handleSaveVehicleEdit}
+            onSave={async (payload) => {
+              await updateVehicle(vehicle.id, payload);
+              setIsEditVehicleOpen(false);
+            }}
           />
         </View>
       </ScrollView>

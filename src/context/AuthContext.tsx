@@ -13,8 +13,9 @@ import {
   createUserWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
+import { auth } from "../firebase/firebaseConfig";
 
-import { auth } from "@/src/firebase/firebaseConfig";
+
 
 interface AuthContextType {
   user: User | null;

@@ -36,9 +36,9 @@ export function DocumentPreviewModal({ document, onClose }: Props) {
           //   style={styles.image}
           //   resizeMode="contain"
           // />
-          
+
           <Image
-            source={document.fileUri}
+            source={document.fileUrl || document.fileUri}
             style={styles.image}
             contentFit="contain"
           />
