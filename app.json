@@ -4,12 +4,12 @@
     "slug": "ZoneGard",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/ZoneGard-Logo3.png",
+    "icon": "./assets/images/ZoneGard-Logo-final.png",
     "scheme": "zonegard",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/ZoneGard-Logo-main.png",
+      "image": "./assets/images/ZoneGard-Login.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -18,10 +18,10 @@
     },
     "android": {
       "package": "com.rithik.zonegard",
-        "softwareKeyboardLayoutMode": "pan",
+      "softwareKeyboardLayoutMode": "pan",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/ZoneGard-Logo.png",
+        "foregroundImage": "./assets/images/ZoneGard-Logo-final.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -35,7 +35,8 @@
     "plugins": [
       "expo-router",
       "@react-native-community/datetimepicker",
-      "expo-secure-store"
+      "expo-secure-store",
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true

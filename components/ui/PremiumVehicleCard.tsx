@@ -135,7 +135,7 @@ export function PremiumVehicleCard({
               <FontAwesome6
                 name="eye"
                 size={12}
-                color={Theme.colors.primaryGlow}
+                color={Theme.colors.textPrimary}
               />
               <Text style={styles.actionText}>View</Text>
             </Pressable>
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.dangerMuted,
   },
   actionText: {
-    color: Theme.colors.primaryGlow,
+    color: Theme.colors.textPrimary,
     fontSize: 12,
     fontWeight: "700",
   },

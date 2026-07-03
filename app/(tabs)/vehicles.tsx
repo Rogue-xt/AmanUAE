@@ -187,7 +187,7 @@ export default function VehiclesScreen() {
                     plateNumber={vehicle.plateNumber}
                     linkedDocuments={linkedDocuments}
                     onView={() => router.push(`/vehicle/${vehicle.id}`)}
-                    // onDelete={() => handleDeleteVehicle(vehicle)}
+                    onDelete={() => handleDeleteVehicle(vehicle)}
                     // onEdit={() => openEditVehicle(vehicle)}
                   />
                 </FadeInView>

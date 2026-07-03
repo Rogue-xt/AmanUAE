@@ -5,7 +5,7 @@ import React, {
   useState,
   ReactNode,
 } from "react";
-
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import {
   User,
   onAuthStateChanged,
@@ -13,10 +13,10 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   sendPasswordResetEmail,
+  GoogleAuthProvider,
+  signInWithCredential,
 } from "firebase/auth";
 import { auth } from "../firebase/firebaseConfig";
-
-
 
 interface AuthContextType {
   user: User | null;
@@ -25,10 +25,14 @@ interface AuthContextType {
   signup: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
+GoogleSignin.configure({
+  webClientId:
+    "599396470801-pqrgen6be2snsttjerj5g99e7kp7e4it.apps.googleusercontent.com",
+});
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -57,6 +61,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signOut(auth);
   };
 
+  const loginWithGoogle = async () => {
+    await GoogleSignin.hasPlayServices({
+      showPlayServicesUpdateDialog: true,
+    });
+    await GoogleSignin.signOut();
+    const signInResult = await GoogleSignin.signIn();
+
+    const idToken = signInResult.data?.idToken;
+
+    if (!idToken) {
+      throw new Error("Google sign-in failed: missing ID token.");
+    }
+
+    const googleCredential = GoogleAuthProvider.credential(idToken);
+
+    await signInWithCredential(auth, googleCredential);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -66,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signup,
         resetPassword,
         logout,
+        loginWithGoogle,
       }}
     >
       {children}

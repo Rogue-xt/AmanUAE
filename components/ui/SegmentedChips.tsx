@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
     marginRight: 0,
   },
   chipActive: {
-    backgroundColor: Theme.colors.primaryMuted,
+    backgroundColor: Theme.colors.primary,
     borderColor: Theme.colors.primary,
     ...Theme.shadow.glow,
   },
@@ -93,6 +93,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   chipTextActive: {
-    color: Theme.colors.primaryGlow,
+    color: Theme.colors.textPrimary,
   },
 });

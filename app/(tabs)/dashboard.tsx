@@ -1,82 +1,57 @@
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import * as Notifications from "expo-notifications";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
-import { useApp, VehicleProfile } from "../../src/context/AppContext";
+import { useRouter } from "expo-router";
+
+import { useApp } from "../../src/context/AppContext";
 import { Theme } from "@/constants/Theme";
 import { FadeInView } from "@/components/ui/FadeInView";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { ScreenContainer, SectionHeader } from "@/components/ui/ScreenLayout";
-import { useRouter } from "expo-router";
 import {
-  EMIRATES_LIST,
   computeComplianceScore,
   formatDocType,
-  formatEmirate,
   getDaysRemaining,
   getGreeting,
   getUrgency,
 } from "@/components/ui/utils";
+import { Image } from "expo-image";
 
 export default function DashboardScreen() {
   const {
     vehicles,
     documents,
-    addVehicle,
-    deleteVehicle,
     activeTicket,
     clearParkingSession,
+    parkingSessions,
   } = useApp();
+
   const router = useRouter();
   const [now, setNow] = useState(Date.now());
-  const [label, setLabel] = useState("");
-  const [plateCode, setPlateCode] = useState("");
-  const [plateNumber, setPlateNumber] = useState("");
-
-  useEffect(() => {
-    if (activeTicket && activeTicket.expiryTimestamp <= now) {
-      clearParkingSession();
-    }
-  }, [activeTicket, now]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (activeTicket && activeTicket.expiryTimestamp <= now) {
+      clearParkingSession();
+    }
+  }, [activeTicket, now, clearParkingSession]);
+
   const ticketInfo = useMemo(() => {
     if (!activeTicket) return null;
 
     const remainingMs = activeTicket.expiryTimestamp - now;
-
-    if (remainingMs <= 0) {
-      return {
-        expired: true,
-        minutes: 0,
-        seconds: 0,
-        expiresAt: new Date(activeTicket.expiryTimestamp).toLocaleTimeString(
-          [],
-          { hour: "2-digit", minute: "2-digit" },
-        ),
-      };
-    }
-
-
-
-    const totalSeconds = Math.floor(remainingMs / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
+    const totalSeconds = Math.max(0, Math.floor(remainingMs / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
 
     return {
-      expired: false,
+      expired: remainingMs <= 0,
+      hours,
       minutes,
       seconds,
       expiresAt: new Date(activeTicket.expiryTimestamp).toLocaleTimeString([], {
@@ -93,7 +68,7 @@ export default function DashboardScreen() {
         daysRemaining: getDaysRemaining(doc.expiryDate),
       }))
       .sort((a, b) => a.daysRemaining - b.daysRemaining)
-      .slice(0, 3);
+      .slice(0, 4);
   }, [documents]);
 
   const alertCount = useMemo(() => {
@@ -101,6 +76,11 @@ export default function DashboardScreen() {
       const days = getDaysRemaining(doc.expiryDate);
       return getUrgency(days) !== "Safe";
     }).length;
+  }, [documents]);
+
+  const expiredCount = useMemo(() => {
+    return documents.filter((doc) => getDaysRemaining(doc.expiryDate) < 0)
+      .length;
   }, [documents]);
 
   const complianceScore = useMemo(
@@ -119,19 +99,14 @@ export default function DashboardScreen() {
         ? Theme.colors.warning
         : Theme.colors.danger;
 
-const testNotification = async () => {
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: "ZoneGard Test",
-      body: "Notifications are working.",
-      data: { screen: "dashboard" },
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-      seconds: 5,
-    },
-  });
-};   
+  const timerText = ticketInfo
+    ? ticketInfo.hours > 0
+      ? `${String(ticketInfo.hours).padStart(2, "0")}:${String(ticketInfo.minutes).padStart(2, "0")}:${String(ticketInfo.seconds).padStart(2, "0")}`
+      : `${String(ticketInfo.minutes).padStart(2, "0")}:${String(ticketInfo.seconds).padStart(2, "0")}`
+    : "--:--";
+
+  const lastSession = parkingSessions[0];
+
   return (
     <ScreenContainer>
       <ScrollView
@@ -139,110 +114,114 @@ const testNotification = async () => {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.scrollContent}
       >
-        <FadeInView delay={0}>
-          <View style={styles.brandRow}>
-            <View style={styles.logoBox}>
-              <Text style={styles.logoText}>ZG</Text>
-            </View>
-            <View style={styles.brandText}>
-              <Text style={styles.brandName}>ZoneGard</Text>
-              <Text style={styles.brandTagline}>
-                UAE Parking & Document Shield
-              </Text>
-            </View>
+        <View style={styles.brandRow}>
+          <View style={styles.logoWrapper}>
+            <Image
+              source={require("@/assets/images/ZoneGard-Logo.png")}
+              style={styles.logoImage}
+              contentFit="cover"
+            />
           </View>
-          <Text style={styles.greeting}>{getGreeting()}</Text>
-        </FadeInView>
-        <Pressable onPress={testNotification}>
-          <Text>Test Notification</Text>
-        </Pressable>
 
+          <View style={styles.brandText}>
+            <Text style={styles.greeting}>{getGreeting()}</Text>
+            <Text style={styles.brandSub}>
+              Smart parking & document companion
+            </Text>
+          </View>
+
+          <Pressable
+            style={styles.headerIconButton}
+            onPress={() => router.push("/settings")}
+          >
+            <FontAwesome6
+              name="gear"
+              size={16}
+              color={Theme.colors.textPrimary}
+            />
+          </Pressable>
+        </View>
         <FadeInView delay={80}>
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryItem}>
-              <FontAwesome6
-                name="car-side"
-                size={14}
-                color={Theme.colors.primaryGlow}
-              />
-              <Text style={styles.summaryValue}>{vehicles.length}</Text>
-              <Text style={styles.summaryLabel}>Vehicles</Text>
-            </View>
-            <View style={styles.summaryDivider} />
-            <View style={styles.summaryItem}>
-              <FontAwesome6
-                name="file-shield"
-                size={14}
-                color={Theme.colors.primaryGlow}
-              />
-              <Text style={styles.summaryValue}>{documents.length}</Text>
-              <Text style={styles.summaryLabel}>Documents</Text>
-            </View>
-            <View style={styles.summaryDivider} />
-            <View style={styles.summaryItem}>
-              <FontAwesome6
-                name="bell"
-                size={14}
-                color={
-                  alertCount > 0 ? Theme.colors.warning : Theme.colors.textMuted
-                }
-              />
-              <Text
-                style={[
-                  styles.summaryValue,
-                  alertCount > 0 && { color: Theme.colors.warning },
-                ]}
-              >
-                {alertCount}
-              </Text>
-              <Text style={styles.summaryLabel}>Alerts</Text>
-            </View>
+          <View style={styles.metricsGrid}>
+            <MetricCard
+              icon="car-side"
+              label="Vehicles"
+              value={vehicles.length}
+            />
+            <MetricCard
+              icon="file-shield"
+              label="Documents"
+              value={documents.length}
+            />
+            <MetricCard
+              icon="bell"
+              label="Alerts"
+              value={alertCount}
+              tone={
+                alertCount > 0 ? Theme.colors.warning : Theme.colors.textMuted
+              }
+            />
+            <MetricCard
+              icon="circle-xmark"
+              label="Expired"
+              value={expiredCount}
+              tone={
+                expiredCount > 0 ? Theme.colors.danger : Theme.colors.textMuted
+              }
+            />
           </View>
         </FadeInView>
 
-        <FadeInView delay={160}>
+        <FadeInView delay={140}>
           {activeTicket && ticketInfo ? (
             <View
               style={[
-                styles.heroCard,
-                ticketInfo.expired && styles.heroCardExpired,
+                styles.parkingHero,
+                ticketInfo.expired && styles.parkingHeroExpired,
               ]}
             >
-              <View style={styles.heroTop}>
-                <View>
+              <View style={styles.parkingTopRow}>
+                <View style={styles.parkingIconBox}>
+                  <FontAwesome6
+                    name="square-parking"
+                    size={23}
+                    color={
+                      ticketInfo.expired
+                        ? Theme.colors.danger
+                        : Theme.colors.primaryGlow
+                    }
+                  />
+                </View>
+
+                <View style={styles.parkingTitleBlock}>
                   <Text
                     style={[
-                      styles.heroKicker,
+                      styles.parkingKicker,
                       ticketInfo.expired && { color: Theme.colors.danger },
                     ]}
                   >
-                    {ticketInfo.expired ? "Session Expired" : "Active Parking"}
+                    {ticketInfo.expired ? "Parking expired" : "Active parking"}
                   </Text>
-                  <Text style={styles.heroVehicle}>
+                  <Text style={styles.parkingVehicle}>
                     {activeTicket.vehicleLabel}
                   </Text>
-                  <Text style={styles.heroMeta}>
-                    {activeTicket.parkingEmirate} · {activeTicket.plateDetails}
+                  <Text style={styles.parkingMeta}>
+                    {activeTicket.parkingEmirate} • {activeTicket.plateDetails}
                   </Text>
-                </View>
-                <View style={styles.complianceRing}>
-                  <Text
-                    style={[styles.complianceValue, { color: complianceColor }]}
-                  >
-                    {complianceScore}%
-                  </Text>
-                  <Text style={styles.complianceLabel}>Score</Text>
                 </View>
               </View>
 
-              <View style={styles.timerSection}>
-                <Text style={styles.timerLabel}>Time Remaining</Text>
-                <Text style={styles.timerDisplay}>
-                  {ticketInfo.expired
-                    ? "00:00"
-                    : `${String(ticketInfo.minutes).padStart(2, "0")}:${String(ticketInfo.seconds).padStart(2, "0")}`}
+              <View style={styles.timerBox}>
+                <Text style={styles.timerLabel}>Time remaining</Text>
+                <Text
+                  style={[
+                    styles.timerText,
+                    ticketInfo.expired && { color: Theme.colors.danger },
+                  ]}
+                >
+                  {ticketInfo.expired ? "00:00" : timerText}
                 </Text>
-                <Text style={styles.expiryText}>
+                <Text style={styles.timerSub}>
                   Expires at {ticketInfo.expiresAt}
                 </Text>
               </View>
@@ -255,61 +234,153 @@ const testNotification = async () => {
               />
             </View>
           ) : (
-            <View style={styles.heroCardEmpty}>
-              <View style={styles.emptyHeroIcon}>
-                <FontAwesome6
-                  name="square-parking"
-                  size={28}
-                  color={Theme.colors.primaryGlow}
-                />
+            <View style={styles.emptyParkingHero}>
+              <View style={styles.emptyParkingLeft}>
+                <View style={styles.emptyParkingIcon}>
+                  <FontAwesome6
+                    name="square-parking"
+                    size={24}
+                    color={Theme.colors.primaryGlow}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.emptyParkingTitle}>
+                    No active parking
+                  </Text>
+                  <Text style={styles.emptyParkingSub}>
+                    Generate a ticket and ZoneGard will track the countdown.
+                  </Text>
+                </View>
               </View>
-              <Text style={styles.emptyHeroTitle}>No Active Parking</Text>
+
+              <Pressable
+                style={styles.startParkingButton}
+                onPress={() => router.push("/(tabs)/parking")}
+              >
+                <Text style={styles.startParkingText}>Start</Text>
+              </Pressable>
             </View>
           )}
         </FadeInView>
 
-        <FadeInView delay={320}>
+        <FadeInView delay={200}>
+          <View style={styles.quickActionsRow}>
+            <QuickAction
+              icon="square-parking"
+              label="Parking"
+              onPress={() => router.push("/(tabs)/parking")}
+            />
+            <QuickAction
+              icon="folder-open"
+              label="Vault"
+              onPress={() => router.push("/(tabs)/vault")}
+            />
+            <QuickAction
+              icon="car-side"
+              label="Vehicles"
+              onPress={() => router.push("/(tabs)/vehicles")}
+            />
+          </View>
+        </FadeInView>
+
+        <FadeInView delay={260}>
           <View style={styles.sectionCard}>
             <SectionHeader
               title="Critical Documents"
               subtitle="Nearest expiry in your vault"
               badge={documents.length}
             />
+
             {urgentDocuments.length === 0 ? (
-              <Text style={styles.emptyText}>
-                No documents tracked yet. Add records in the Vault tab.
-              </Text>
+              <View style={styles.emptyDocsBox}>
+                <FontAwesome6
+                  name="file-circle-plus"
+                  size={24}
+                  color={Theme.colors.textMuted}
+                />
+                <Text style={styles.emptyDocsTitle}>No documents tracked</Text>
+                <Text style={styles.emptyDocsSub}>
+                  Add Emirates ID, Mulkiya, insurance, visa, or passport records
+                  in Vault.
+                </Text>
+              </View>
             ) : (
-              urgentDocuments.map((doc) => (
-                <View key={doc.id} style={styles.docRow}>
-                  <View style={styles.docIcon}>
-                    <FontAwesome6
-                      name="file-lines"
-                      size={14}
-                      color={Theme.colors.primaryGlow}
-                    />
-                  </View>
-                  <View style={styles.docInfo}>
-                    <Text style={styles.docTitle}>
-                      {doc.title || formatDocType(doc.type)}
-                    </Text>
-                    <Text style={styles.docMeta}>
-                      {formatDocType(doc.type)} · {doc.expiryDate}
-                    </Text>
-                  </View>
-                  <Text
-                    style={[
-                      styles.docDays,
-                      doc.daysRemaining <= 30 && styles.docDaysDanger,
-                    ]}
+              urgentDocuments.map((doc) => {
+                const isExpired = doc.daysRemaining < 0;
+                const isCritical = doc.daysRemaining <= 30;
+
+                return (
+                  <Pressable
+                    key={doc.id}
+                    style={styles.docRow}
+                    onPress={() => router.push("/(tabs)/vault")}
                   >
-                    {doc.daysRemaining < 0
-                      ? `${Math.abs(doc.daysRemaining)}d overdue`
-                      : `${doc.daysRemaining}d left`}
-                  </Text>
-                </View>
-              ))
+                    <View
+                      style={[
+                        styles.docIcon,
+                        isCritical && styles.docIconWarning,
+                      ]}
+                    >
+                      <FontAwesome6
+                        name="file-lines"
+                        size={14}
+                        color={
+                          isCritical
+                            ? Theme.colors.warning
+                            : Theme.colors.primaryGlow
+                        }
+                      />
+                    </View>
+
+                    <View style={styles.docInfo}>
+                      <Text style={styles.docTitle} numberOfLines={1}>
+                        {doc.title || formatDocType(doc.type)}
+                      </Text>
+                      <Text style={styles.docMeta} numberOfLines={1}>
+                        {formatDocType(doc.type)} • {doc.expiryDate}
+                      </Text>
+                    </View>
+
+                    <View style={styles.daysPill}>
+                      <Text
+                        style={[
+                          styles.docDays,
+                          isCritical && styles.docDaysDanger,
+                        ]}
+                      >
+                        {isExpired
+                          ? `${Math.abs(doc.daysRemaining)}d overdue`
+                          : `${doc.daysRemaining}d`}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })
             )}
+          </View>
+        </FadeInView>
+
+        <FadeInView delay={320}>
+          <View style={styles.recentCard}>
+            <View style={styles.recentLeft}>
+              <Text style={styles.recentTitle}>Recent Parking</Text>
+              <Text style={styles.recentSub}>
+                {lastSession
+                  ? `${lastSession.vehicleLabel} • ${lastSession.parkingEmirate}`
+                  : "No parking history yet"}
+              </Text>
+            </View>
+
+            <Pressable
+              style={styles.recentButton}
+              onPress={() => router.push("/parking-sessions")}
+            >
+              <FontAwesome6
+                name="arrow-right"
+                size={13}
+                color={Theme.colors.textPrimary}
+              />
+            </Pressable>
           </View>
         </FadeInView>
       </ScrollView>
@@ -317,198 +388,324 @@ const testNotification = async () => {
   );
 }
 
+function MetricCard({
+  icon,
+  label,
+  value,
+  tone = Theme.colors.primaryGlow,
+}: {
+  icon: React.ComponentProps<typeof FontAwesome6>["name"];
+  label: string;
+  value: string | number;
+  tone?: string;
+}) {
+  return (
+    <View style={styles.metricCard}>
+      <FontAwesome6 name={icon} size={14} color={tone} />
+      <Text style={styles.metricValue}>{value}</Text>
+      <Text style={styles.metricLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function QuickAction({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof FontAwesome6>["name"];
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable style={styles.quickAction} onPress={onPress}>
+      <View style={styles.quickIcon}>
+        <FontAwesome6 name={icon} size={15} color={Theme.colors.textPrimary} />
+      </View>
+      <Text style={styles.quickLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Theme.spacing.xl,
+    paddingTop: Theme.spacing.md,
     paddingBottom: 120,
-    paddingTop: Theme.spacing.sm,
+  },
+  headerCard: {
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.xxl,
+    padding: Theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    marginBottom: Theme.spacing.md,
+    ...Theme.shadow.card,
   },
   brandRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: Theme.spacing.md,
-    marginBottom: Theme.spacing.sm,
+    marginBottom:20
   },
   logoBox: {
-    width: 52,
-    height: 52,
-    borderRadius: Theme.radius.lg,
-    backgroundColor: Theme.colors.elevated,
-    borderWidth: 1,
-    borderColor: Theme.colors.primary,
+    width: 54,
+    height: 54,
+    borderRadius: 20,
+    backgroundColor: Theme.colors.primary,
     alignItems: "center",
     justifyContent: "center",
-    ...Theme.shadow.glow,
   },
   logoText: {
-    color: Theme.colors.primaryGlow,
+    color: Theme.colors.textPrimary,
     fontSize: 18,
     fontWeight: "900",
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
   brandText: {
     flex: 1,
   },
-  brandName: {
+  greeting: {
     color: Theme.colors.textPrimary,
-    fontSize: 22,
-    fontWeight: "800",
-    letterSpacing: -0.3,
+    fontSize: 20,
+    fontWeight: "900",
   },
-  brandTagline: {
-    color: Theme.colors.textMuted,
+  brandSub: {
+    color: Theme.colors.textSecondary,
     fontSize: 12,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+  headerIconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: Theme.colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  scoreRow: {
+    marginTop: Theme.spacing.lg,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+  },
+  scoreLabel: {
+    color: Theme.colors.textMuted,
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+  },
+  scoreValue: {
+    fontSize: 42,
+    fontWeight: "900",
     marginTop: 2,
   },
-  greeting: {
-    color: Theme.colors.textSecondary,
-    fontSize: 15,
-    fontWeight: "600",
-    marginBottom: Theme.spacing.xl,
-  },
-  summaryRow: {
+  scoreBadge: {
     flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    backgroundColor: Theme.colors.surface,
+    borderRadius: Theme.radius.full,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    marginBottom: 7,
+  },
+  scoreBadgeText: {
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  metricsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Theme.spacing.sm,
+    marginBottom: Theme.spacing.md,
+  },
+  metricCard: {
+    width: "48.6%",
     backgroundColor: Theme.colors.card,
     borderRadius: Theme.radius.lg,
     borderWidth: 1,
     borderColor: Theme.colors.border,
-    padding: Theme.spacing.lg,
-    marginBottom: Theme.spacing.lg,
+    padding: Theme.spacing.md,
+    minHeight: 92,
+    justifyContent: "space-between",
   },
-  summaryItem: {
-    flex: 1,
-    alignItems: "center",
-    gap: 4,
-  },
-  summaryDivider: {
-    width: 1,
-    backgroundColor: Theme.colors.border,
-    marginHorizontal: Theme.spacing.sm,
-  },
-  summaryValue: {
+  metricValue: {
     color: Theme.colors.textPrimary,
-    fontSize: 18,
-    fontWeight: "800",
+    fontSize: 22,
+    fontWeight: "900",
+    marginTop: 8,
   },
-  summaryLabel: {
+  metricLabel: {
     color: Theme.colors.textMuted,
     fontSize: 10,
-    fontWeight: "700",
+    fontWeight: "900",
     textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
-  heroCard: {
+  parkingHero: {
     backgroundColor: Theme.colors.card,
     borderRadius: Theme.radius.xxl,
-    padding: Theme.spacing.xl,
+    padding: Theme.spacing.lg,
     borderWidth: 1,
     borderColor: Theme.colors.primary,
-    marginBottom: Theme.spacing.lg,
+    marginBottom: Theme.spacing.md,
     ...Theme.shadow.glow,
   },
-  heroCardExpired: {
+  parkingHeroExpired: {
     borderColor: Theme.colors.danger,
     ...Theme.shadow.card,
   },
-  heroTop: {
+  parkingTopRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: Theme.spacing.lg,
+    gap: Theme.spacing.md,
+    alignItems: "center",
   },
-  heroKicker: {
-    ...Theme.typography.label,
-    color: Theme.colors.success,
-    marginBottom: Theme.spacing.xs,
-  },
-  heroVehicle: {
-    color: Theme.colors.textPrimary,
-    fontSize: 20,
-    fontWeight: "800",
-  },
-  heroMeta: {
-    color: Theme.colors.textSecondary,
-    fontSize: 13,
-    marginTop: 4,
-  },
-  complianceRing: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+  parkingIconBox: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
     backgroundColor: Theme.colors.surface,
-    borderWidth: 2,
-    borderColor: Theme.colors.border,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
   },
-  complianceValue: {
-    fontSize: 16,
+  parkingTitleBlock: {
+    flex: 1,
+  },
+  parkingKicker: {
+    color: Theme.colors.success,
+    fontSize: 11,
     fontWeight: "900",
-  },
-  complianceLabel: {
-    color: Theme.colors.textMuted,
-    fontSize: 8,
-    fontWeight: "700",
     textTransform: "uppercase",
+    letterSpacing: 0.7,
   },
-  timerSection: {
+  parkingVehicle: {
+    color: Theme.colors.textPrimary,
+    fontSize: 20,
+    fontWeight: "900",
+    marginTop: 3,
+  },
+  parkingMeta: {
+    color: Theme.colors.textSecondary,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+  timerBox: {
     backgroundColor: Theme.colors.surface,
-    borderRadius: Theme.radius.lg,
+    borderRadius: Theme.radius.xl,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderSubtle,
     padding: Theme.spacing.lg,
     alignItems: "center",
+    marginTop: Theme.spacing.lg,
     marginBottom: Theme.spacing.md,
   },
   timerLabel: {
-    ...Theme.typography.label,
     color: Theme.colors.textMuted,
-    marginBottom: Theme.spacing.xs,
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
   },
-  timerDisplay: {
-    ...Theme.typography.mono,
+  timerText: {
     color: Theme.colors.textPrimary,
+    fontSize: 42,
+    fontWeight: "900",
+    marginTop: 4,
   },
-  expiryText: {
+  timerSub: {
     color: Theme.colors.textSecondary,
     fontSize: 12,
-    marginTop: Theme.spacing.xs,
+    fontWeight: "700",
+    marginTop: 2,
   },
   endButton: {
-    marginTop: Theme.spacing.sm,
+    marginTop: Theme.spacing.xs,
   },
-  heroCardEmpty: {
+  emptyParkingHero: {
     backgroundColor: Theme.colors.card,
     borderRadius: Theme.radius.xxl,
-    padding: Theme.spacing.xl,
+    padding: Theme.spacing.lg,
     borderWidth: 1,
     borderColor: Theme.colors.border,
-    borderStyle: "dashed",
+    marginBottom: Theme.spacing.md,
+    flexDirection: "row",
     alignItems: "center",
-    marginBottom: Theme.spacing.lg,
+    justifyContent: "space-between",
+    gap: Theme.spacing.md,
   },
-  emptyHeroIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  emptyParkingLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Theme.spacing.md,
+  },
+  emptyParkingIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 17,
     backgroundColor: Theme.colors.primaryMuted,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: Theme.spacing.md,
   },
-  emptyHeroTitle: {
+  emptyParkingTitle: {
     color: Theme.colors.textPrimary,
-    fontSize: 17,
-    fontWeight: "700",
+    fontSize: 16,
+    fontWeight: "900",
   },
-  emptyHeroSub: {
-    color: Theme.colors.textMuted,
-    fontSize: 13,
-    textAlign: "center",
-    marginTop: Theme.spacing.sm,
-    lineHeight: 19,
+  emptyParkingSub: {
+    color: Theme.colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 3,
   },
-
-  kpiRow: {
+  startParkingButton: {
+    backgroundColor: Theme.colors.primary,
+    borderRadius: Theme.radius.full,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  startParkingText: {
+    color: Theme.colors.textPrimary,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  quickActionsRow: {
     flexDirection: "row",
     gap: Theme.spacing.sm,
-    marginBottom: Theme.spacing.lg,
+    marginBottom: Theme.spacing.md,
+  },
+  quickAction: {
+    flex: 1,
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    padding: Theme.spacing.md,
+    alignItems: "center",
+    gap: 8,
+  },
+  quickIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: Theme.colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  quickLabel: {
+    color: Theme.colors.textSecondary,
+    fontSize: 11,
+    fontWeight: "900",
   },
   sectionCard: {
     backgroundColor: Theme.colors.card,
@@ -516,12 +713,23 @@ const styles = StyleSheet.create({
     padding: Theme.spacing.lg,
     borderWidth: 1,
     borderColor: Theme.colors.border,
-    marginBottom: Theme.spacing.lg,
+    marginBottom: Theme.spacing.md,
   },
-  emptyText: {
+  emptyDocsBox: {
+    alignItems: "center",
+    paddingVertical: Theme.spacing.xl,
+    gap: 8,
+  },
+  emptyDocsTitle: {
+    color: Theme.colors.textPrimary,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  emptyDocsSub: {
     color: Theme.colors.textMuted,
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 12,
+    textAlign: "center",
+    lineHeight: 18,
   },
   docRow: {
     flexDirection: "row",
@@ -534,13 +742,16 @@ const styles = StyleSheet.create({
     borderColor: Theme.colors.borderSubtle,
   },
   docIcon: {
-    width: 32,
-    height: 32,
+    width: 34,
+    height: 34,
     borderRadius: Theme.radius.sm,
     backgroundColor: Theme.colors.primaryMuted,
     alignItems: "center",
     justifyContent: "center",
     marginRight: Theme.spacing.md,
+  },
+  docIconWarning: {
+    backgroundColor: Theme.colors.warningMuted,
   },
   docInfo: {
     flex: 1,
@@ -548,19 +759,85 @@ const styles = StyleSheet.create({
   docTitle: {
     color: Theme.colors.textPrimary,
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "800",
   },
   docMeta: {
     color: Theme.colors.textMuted,
     fontSize: 11,
     marginTop: 2,
+    fontWeight: "600",
+  },
+  daysPill: {
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.full,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
   },
   docDays: {
     color: Theme.colors.warning,
-    fontSize: 12,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
   },
   docDaysDanger: {
     color: Theme.colors.danger,
+  },
+  recentCard: {
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.xl,
+    padding: Theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  recentLeft: {
+    flex: 1,
+  },
+  recentTitle: {
+    color: Theme.colors.textPrimary,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  recentSub: {
+    color: Theme.colors.textSecondary,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 4,
+  },
+  recentButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: Theme.colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  //new
+  logoWrapper: {
+    width: 62,
+    height: 62,
+    borderRadius: 18,
+    // backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: {
+      width: 0,
+      height: 5,
+    },
+    elevation: 5,
+  },
+
+  logoImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius:10
   },
 });

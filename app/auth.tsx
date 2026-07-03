@@ -24,12 +24,13 @@ const WHITE = "#FFFFFF";
 const MUTED = "#6B7280";
 
 export default function AuthScreen() {
-  const { user, login } = useAuth();
+  const { user, login, loginWithGoogle } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
 
   const fade = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(24)).current;
@@ -50,6 +51,20 @@ export default function AuthScreen() {
   }, []);
 
   if (user) return <Redirect href="/(tabs)/dashboard" />;
+
+  const handleGoogleLogin = async () => {
+    try {
+      setIsGoogleSubmitting(true);
+      await loginWithGoogle();
+    } catch (error: any) {
+      Alert.alert(
+        "Google login failed",
+        error?.message || "Could not sign in with Google.",
+      );
+    } finally {
+      setIsGoogleSubmitting(false);
+    }
+  };
 
   const handleLogin = async () => {
     const cleanEmail = email.trim();
@@ -90,7 +105,7 @@ export default function AuthScreen() {
           ]}
         >
           <Image
-            source={require("../assets/images/ZoneGard-Logo-banner.png")}
+            source={require("../assets/images/ZoneGard-Login.png")}
             style={styles.logo}
             resizeMode="contain"
           />
@@ -171,15 +186,17 @@ export default function AuthScreen() {
 
           <Pressable
             style={styles.googleButton}
-            onPress={() =>
-              Alert.alert(
-                "Coming next",
-                "Google sign-in will be connected after native auth setup.",
-              )
-            }
+            onPress={handleGoogleLogin}
+            disabled={isGoogleSubmitting}
           >
-            <FontAwesome6 name="google" size={15} color={BLACK} />
-            <Text style={styles.googleText}>Continue with Google</Text>
+            {isGoogleSubmitting ? (
+              <ActivityIndicator color="#000" />
+            ) : (
+              <>
+                <FontAwesome6 name="google" size={15} color="#d1ae2f" />
+                <Text style={styles.googleText}>Continue with Google</Text>
+              </>
+            )}
           </Pressable>
 
           <Pressable

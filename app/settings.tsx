@@ -39,7 +39,13 @@ export default function SettingsScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      <Stack.Screen options={{ title: "Profile" }} />
+      <Stack.Screen options={{ title: "Profile" , headerStyle: {
+            backgroundColor: Theme.colors.primary,
+          },
+          headerTintColor: "#000",
+          headerTitleStyle: {
+            fontWeight: "700",
+          }, }} />
 
       <View style={styles.profileCard}>
         <View style={styles.avatar}>

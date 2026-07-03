@@ -212,6 +212,13 @@ await openFileWithViewer(sourceUri, doc.fileName, doc.mimeType);
       <Stack.Screen
         options={{
           title: vehicle?.label || "Vehicle Details",
+          headerStyle: {
+                      backgroundColor: Theme.colors.primary,
+                    },
+                    headerTintColor: "#000",
+                    headerTitleStyle: {
+                      fontWeight: "700",
+                    },
         }}
       />
       <ScrollView

@@ -20,6 +20,7 @@ export function useCloudSync() {
     activeTicket,
     isLoading,
     hasRestored,
+    restoredUid,
   } = useApp();
   console.log("Cloud sync hook running");
   console.log("User:", user?.uid);
@@ -28,31 +29,34 @@ export function useCloudSync() {
   console.log("Parking Sessions:", parkingSessions.length);
 
   useEffect(() => {
-    if (!user || isLoading || !hasRestored) return;
-
+    if (!user?.uid || isLoading || !hasRestored || restoredUid !== user.uid)
+      return;
     vehicles.forEach((vehicle) => {
-     CloudService.saveVehicle(user.uid, vehicle)
-       .then(() => console.log("Vehicle synced:", vehicle.id, vehicle.label))
-       .catch((error) => console.log("Vehicle sync failed:", error));
+      CloudService.saveVehicle(user.uid, vehicle)
+        .then(() => console.log("Vehicle synced:", vehicle.id, vehicle.label))
+        .catch((error) => console.log("Vehicle sync failed:", error));
     });
-  }, [vehicles, user, isLoading, hasRestored]);
+  }, [vehicles, user, isLoading, hasRestored, restoredUid]);
 
   useEffect(() => {
-    if (!user || isLoading || !hasRestored) return;
+    if (!user?.uid || isLoading || !hasRestored || restoredUid !== user.uid)
+      return;
     documents.forEach((documentItem) => {
       CloudService.saveDocument(user.uid, documentItem).catch(console.error);
     });
-  }, [documents, user, isLoading, hasRestored]);
+  }, [documents, user, isLoading, hasRestored, restoredUid]);
 
   useEffect(() => {
-    if (!user || isLoading || !hasRestored) return;
+    if (!user?.uid || isLoading || !hasRestored || restoredUid !== user.uid)
+      return;
     parkingSessions.forEach((session) => {
-     CloudService.saveParkingSession(user.uid, session).catch(console.error);
+      CloudService.saveParkingSession(user.uid, session).catch(console.error);
     });
-  }, [parkingSessions, user, isLoading, hasRestored]);
+  }, [parkingSessions, user, isLoading, hasRestored, restoredUid]);
 
   useEffect(() => {
-    if (!user || isLoading || !hasRestored) return;
-   CloudService.saveActiveTicket(user.uid, activeTicket).catch(console.error);
-  }, [activeTicket, user, isLoading, hasRestored]);
+    if (!user?.uid || isLoading || !hasRestored || restoredUid !== user.uid)
+      return;
+    CloudService.saveActiveTicket(user.uid, activeTicket).catch(console.error);
+  }, [activeTicket, user, isLoading, hasRestored, restoredUid]);
 }

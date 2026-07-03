@@ -4,14 +4,14 @@ import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { DocumentRecord } from "@/src/context/AppContext";
 import { Theme } from "@/constants/Theme";
 
-const URGENCY_BORDER = {
+const URGENCY_COLOR = {
   Expired: Theme.colors.danger,
   Critical: Theme.colors.danger,
   Warning: Theme.colors.warning,
   Safe: Theme.colors.success,
 };
 
-type Urgency = keyof typeof URGENCY_BORDER;
+type Urgency = keyof typeof URGENCY_COLOR;
 
 type DocumentCardProps = {
   document: DocumentRecord;
@@ -27,6 +27,7 @@ type DocumentCardProps = {
 const getDaysRemaining = (expiryDate: string) => {
   const today = new Date();
   const expiry = new Date(`${expiryDate}T00:00:00`);
+
   today.setHours(0, 0, 0, 0);
 
   return Math.ceil(
@@ -83,12 +84,68 @@ const formatFileSize = (size?: number) => {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-
 function StatusPill({ status }: { status: Urgency }) {
   return (
-    <View style={[styles.statusPill, styles[`status${status}`]]}>
-      <Text style={styles.statusText}>{status}</Text>
+    <View
+      style={[
+        styles.statusPill,
+        { backgroundColor: `${URGENCY_COLOR[status]}22` },
+      ]}
+    >
+      <View
+        style={[styles.statusDot, { backgroundColor: URGENCY_COLOR[status] }]}
+      />
+      <Text style={[styles.statusText, { color: URGENCY_COLOR[status] }]}>
+        {status}
+      </Text>
     </View>
+  );
+}
+
+function ActionButton({
+  label,
+  icon,
+  onPress,
+  variant = "default",
+  disabled,
+}: {
+  label: string;
+  icon: React.ComponentProps<typeof FontAwesome6>["name"];
+  onPress?: () => void;
+  variant?: "default" | "primary" | "danger" | "success";
+  disabled?: boolean;
+}) {
+  const iconColor =
+    variant === "primary"
+      ? Theme.colors.primaryGlow
+      : variant === "danger"
+        ? Theme.colors.danger
+        : variant === "success"
+          ? Theme.colors.success
+          : Theme.colors.textSecondary;
+
+  return (
+    <Pressable
+      disabled={disabled}
+      onPress={onPress}
+      style={[
+        styles.actionBtn,
+        variant === "primary" && styles.primaryActionBtn,
+        variant === "danger" && styles.dangerActionBtn,
+        disabled && styles.actionDisabled,
+      ]}
+    >
+      <FontAwesome6 name={icon} size={12} color={iconColor} />
+      <Text
+        style={[
+          styles.actionText,
+          variant === "primary" && styles.primaryActionText,
+          variant === "danger" && styles.dangerActionText,
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -104,35 +161,53 @@ export function DocumentCard({
 }: DocumentCardProps) {
   const days = getDaysRemaining(document.expiryDate);
   const urgency = getUrgency(days);
-  const borderColor = URGENCY_BORDER[urgency];
+  const accentColor = URGENCY_COLOR[urgency];
 
   return (
-    <View style={[styles.docCard, { borderLeftColor: borderColor }]}>
-      <View style={styles.docTop}>
-        <View style={styles.docIconBox}>
+    <View style={styles.docCard}>
+      <View style={[styles.topAccent, { backgroundColor: accentColor }]} />
+
+      <View style={styles.headerRow}>
+        <View style={styles.iconBox}>
           <FontAwesome6
             name={getDocIconName(document.type)}
-            size={18}
+            size={20}
             color={Theme.colors.primaryGlow}
           />
         </View>
 
-        <View style={styles.docInfo}>
-          <Text style={styles.docTitle}>{document.title}</Text>
+        <View style={styles.titleBlock}>
+          <Text style={styles.docTitle} numberOfLines={1}>
+            {document.title}
+          </Text>
+
           <Text style={styles.docType}>{formatDocType(document.type)}</Text>
         </View>
 
         <StatusPill status={urgency} />
       </View>
 
-      <View style={styles.expiryRow}>
+      <View style={styles.vehicleChip}>
+        <FontAwesome6
+          name="car-side"
+          size={11}
+          color={Theme.colors.primaryGlow}
+        />
+        <Text style={styles.vehicleChipText} numberOfLines={1}>
+          {linkedVehicleName || "Not linked to vehicle"}
+        </Text>
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.infoRow}>
         <View>
-          <Text style={styles.expiryLabel}>Expires</Text>
-          <Text style={styles.expiryDate}>{document.expiryDate}</Text>
+          <Text style={styles.infoLabel}>Expires</Text>
+          <Text style={styles.infoValue}>{document.expiryDate}</Text>
         </View>
 
         <View style={styles.daysBlock}>
-          <Text style={styles.daysValue}>
+          <Text style={[styles.daysValue, { color: accentColor }]}>
             {days < 0 ? Math.abs(days) : days}
           </Text>
           <Text style={styles.daysLabel}>
@@ -141,185 +216,69 @@ export function DocumentCard({
         </View>
       </View>
 
-      <View style={styles.fileInfo}>
-        <FontAwesome6
-          name="paperclip"
-          size={12}
-          color={Theme.colors.textMuted}
-        />
-        <Text style={styles.fileText}>
+      <View style={styles.fileRow}>
+        <View style={styles.fileIconBox}>
+          <FontAwesome6
+            name="paperclip"
+            size={11}
+            color={Theme.colors.textMuted}
+          />
+        </View>
+
+        <Text style={styles.fileText} numberOfLines={1}>
           {document.fileName
             ? `${document.fileName} · ${formatFileSize(document.fileSize)}`
             : "No file attached"}
         </Text>
-        <View style={styles.vehicleBadge}>
-          <FontAwesome6
-            name="car-side"
-            size={12}
-            color={Theme.colors.primaryGlow}
-          />
-
-          <Text style={styles.vehicleBadgeText}>
-            {linkedVehicleName || "Not linked"}
-          </Text>
-        </View>
       </View>
-      {/* 
-      <View style={styles.actions}>
+
+      <View style={styles.actionsWrap}>
         {onView && (
-          <Pressable
-            style={[
-              styles.actionBtn,
-              !document.fileUri && styles.actionDisabled,
-            ]}
+          <ActionButton
+            label="View"
+            icon="eye"
+            // variant="primary"
+            disabled={!document.fileUri && !(document as any).fileUrl}
             onPress={() => onView(document)}
-          >
-            <FontAwesome6
-              name="eye"
-              size={12}
-              color={Theme.colors.textSecondary}
-            />
-            <Text style={styles.actionText}>View</Text>
-          </Pressable>
+          />
         )}
 
-        {onShare && (
-          <Pressable
-            style={[
-              styles.actionBtn,
-              !document.fileUri && styles.actionDisabled,
-            ]}
-            onPress={() => onShare(document)}
-          >
-            <FontAwesome6
-              name="share-nodes"
-              size={12}
-              color={Theme.colors.textSecondary}
-            />
-            <Text style={styles.actionText}>Share</Text>
-          </Pressable>
-        )}
         {onEdit && (
-          <Pressable style={styles.actionBtn} onPress={() => onEdit(document)}>
-            <FontAwesome6
-              name="pen-to-square"
-              size={12}
-              color={Theme.colors.textSecondary}
-            />
-            <Text style={styles.actionText}>Edit</Text>
-          </Pressable>
+          <ActionButton
+            label="Edit"
+            icon="pen-to-square"
+            onPress={() => onEdit(document)}
+          />
         )}
 
         {onRenew && (
-          <Pressable style={styles.actionBtn} onPress={() => onRenew(document)}>
-            <FontAwesome6
-              name="rotate"
-              size={12}
-              color={Theme.colors.success}
-            />
-            <Text style={styles.actionText}>Renew</Text>
-          </Pressable>
+          <ActionButton
+            label="Renew"
+            icon="rotate"
+            variant="success"
+            onPress={() => onRenew(document)}
+          />
         )}
+
+        {onShare && (
+          <ActionButton
+            label="Share"
+            icon="share-nodes"
+            disabled={!document.fileUri && !(document as any).fileUrl}
+            onPress={() => onShare(document)}
+          />
+        )}
+
+        {onLink && <ActionButton label="Link" icon="link" onPress={onLink} />}
+
         {onDelete && (
-          <Pressable
-            style={[styles.actionBtn, styles.deleteBtn]}
+          <ActionButton
+            label="Delete"
+            icon="trash"
+            variant="danger"
             onPress={() => onDelete(document)}
-          >
-            <FontAwesome6 name="trash" size={12} color={Theme.colors.danger} />
-            <Text style={[styles.actionText, styles.deleteText]}>Delete</Text>
-          </Pressable>
+          />
         )}
-      </View> */}
-      <View style={styles.actionsStack}>
-        <View style={styles.actionsRow}>
-          {onView && (
-            <Pressable
-              style={[
-                styles.actionBtn,
-                !document.fileUri && styles.actionDisabled,
-              ]}
-              onPress={() => onView(document)}
-            >
-              <FontAwesome6
-                name="eye"
-                size={12}
-                color={Theme.colors.textSecondary}
-              />
-              <Text style={styles.actionText}>View</Text>
-            </Pressable>
-          )}
-
-          {onShare && (
-            <Pressable
-              style={[
-                styles.actionBtn,
-                !document.fileUri && styles.actionDisabled,
-              ]}
-              onPress={() => onShare(document)}
-            >
-              <FontAwesome6
-                name="share-nodes"
-                size={12}
-                color={Theme.colors.textSecondary}
-              />
-              <Text style={styles.actionText}>Share</Text>
-            </Pressable>
-          )}
-          {onLink && (
-            <Pressable style={styles.actionBtn} onPress={onLink}>
-              <FontAwesome6
-                name="link"
-                size={12}
-                color={Theme.colors.primaryGlow}
-              />
-              <Text style={styles.actionText}>Link</Text>
-            </Pressable>
-          )}
-        </View>
-
-        <View style={styles.actionsRow}>
-          {onEdit && (
-            <Pressable
-              style={styles.actionBtn}
-              onPress={() => onEdit(document)}
-            >
-              <FontAwesome6
-                name="pen-to-square"
-                size={12}
-                color={Theme.colors.textSecondary}
-              />
-              <Text style={styles.actionText}>Edit</Text>
-            </Pressable>
-          )}
-
-          {onRenew && (
-            <Pressable
-              style={styles.actionBtn}
-              onPress={() => onRenew(document)}
-            >
-              <FontAwesome6
-                name="rotate"
-                size={12}
-                color={Theme.colors.success}
-              />
-              <Text style={styles.actionText}>Renew</Text>
-            </Pressable>
-          )}
-
-          {onDelete && (
-            <Pressable
-              style={[styles.actionBtn, styles.deleteBtn]}
-              onPress={() => onDelete(document)}
-            >
-              <FontAwesome6
-                name="trash"
-                size={12}
-                color={Theme.colors.danger}
-              />
-              <Text style={[styles.actionText, styles.deleteText]}>Delete</Text>
-            </Pressable>
-          )}
-        </View>
       </View>
     </View>
   );
@@ -327,169 +286,224 @@ export function DocumentCard({
 
 const styles = StyleSheet.create({
   docCard: {
+    position: "relative",
+    overflow: "hidden",
     backgroundColor: Theme.colors.card,
-    borderRadius: Theme.radius.xl,
-    padding: Theme.spacing.lg,
-    borderWidth: 1,
-    borderLeftWidth: 4,
-    borderColor: Theme.colors.border,
+    borderRadius: 24,
+    padding: 20,
     marginBottom: Theme.spacing.md,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderSubtle,
     ...Theme.shadow.card,
   },
-  docTop: {
+
+  topAccent: {
+    position: "absolute",
+    top: 0,
+    left: 20,
+    right: 20,
+    height: 3,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    opacity: 0.95,
+  },
+
+  headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Theme.spacing.md,
+    gap: 12,
+    paddingTop: 4,
   },
-  docIconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: Theme.radius.md,
+
+  iconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 18,
     backgroundColor: Theme.colors.primaryMuted,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1,
+    borderColor: Theme.colors.borderSubtle,
   },
-  docInfo: {
+
+  titleBlock: {
     flex: 1,
   },
+
   docTitle: {
     color: Theme.colors.textPrimary,
     fontSize: 16,
-    fontWeight: "800",
+    fontWeight: "900",
+    letterSpacing: -0.2,
   },
+
   docType: {
     color: Theme.colors.textSecondary,
     fontSize: 12,
-    marginTop: 3,
-    fontWeight: "600",
+    marginTop: 4,
+    fontWeight: "700",
   },
+
   statusPill: {
-    paddingHorizontal: Theme.spacing.sm,
-    paddingVertical: 5,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     borderRadius: Theme.radius.full,
   },
-  statusExpired: {
-    backgroundColor: Theme.colors.dangerMuted,
+
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
-  statusCritical: {
-    backgroundColor: Theme.colors.dangerMuted,
-  },
-  statusWarning: {
-    backgroundColor: Theme.colors.warningMuted,
-  },
-  statusSafe: {
-    backgroundColor: Theme.colors.successMuted,
-  },
+
   statusText: {
-    color: Theme.colors.textPrimary,
     fontSize: 10,
     fontWeight: "900",
     textTransform: "uppercase",
   },
-  expiryRow: {
+
+  vehicleChip: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 7,
+    marginTop: 14,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: Theme.radius.full,
     backgroundColor: Theme.colors.surface,
-    borderRadius: Theme.radius.lg,
-    padding: Theme.spacing.md,
-    marginTop: Theme.spacing.md,
     borderWidth: 1,
     borderColor: Theme.colors.borderSubtle,
   },
-  expiryLabel: {
+
+  vehicleChipText: {
+    color: Theme.colors.textSecondary,
+    fontSize: 11,
+    fontWeight: "800",
+    maxWidth: 210,
+  },
+
+  divider: {
+    height: 1,
+    backgroundColor: Theme.colors.borderSubtle,
+    marginVertical: 18,
+  },
+
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+  },
+
+  infoLabel: {
     color: Theme.colors.textMuted,
     fontSize: 10,
     fontWeight: "900",
     textTransform: "uppercase",
-    marginBottom: 4,
+    letterSpacing: 0.6,
+    marginBottom: 5,
   },
-  expiryDate: {
+
+  infoValue: {
     color: Theme.colors.textPrimary,
     fontSize: 15,
-    fontWeight: "800",
+    fontWeight: "900",
   },
+
   daysBlock: {
     alignItems: "flex-end",
   },
+
   daysValue: {
-    color: Theme.colors.primaryGlow,
-    fontSize: 22,
+    fontSize: 28,
     fontWeight: "900",
+    lineHeight: 30,
   },
+
   daysLabel: {
     color: Theme.colors.textSecondary,
     fontSize: 10,
-    fontWeight: "700",
+    fontWeight: "800",
+    marginTop: 3,
   },
-  fileInfo: {
+
+  fileRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 7,
-    marginTop: Theme.spacing.md,
+    gap: 9,
+    marginTop: 18,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: Theme.colors.surface,
+    borderWidth: 1,
+    borderColor: Theme.colors.borderSubtle,
   },
-  fileText: {
-    color: Theme.colors.textSecondary,
-    fontSize: 12,
-    fontWeight: "600",
-    flex: 1,
-  },
-  actions: {
-    flexDirection: "row",
-    gap: Theme.spacing.sm,
-    marginTop: Theme.spacing.md,
-  },
-  actionBtn: {
-    flex: 1,
-    flexDirection: "row",
-    gap: 6,
+
+  fileIconBox: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: Theme.colors.card,
+  },
+
+  fileText: {
+    flex: 1,
+    color: Theme.colors.textSecondary,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+
+  actionsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 9,
+    marginTop: 16,
+  },
+
+  actionBtn: {
+    minWidth: "30%",
+    flexGrow: 1,
+    height: 42,
+    borderRadius: 15,
     backgroundColor: Theme.colors.surface,
-    borderRadius: Theme.radius.md,
-    paddingVertical: Theme.spacing.sm,
     borderWidth: 1,
-    borderColor: Theme.colors.border,
+    borderColor: Theme.colors.borderSubtle,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
   },
-  actionDisabled: {
-    opacity: 0.35,
+
+  primaryActionBtn: {
+    backgroundColor: Theme.colors.primaryMuted,
+    borderColor: Theme.colors.primaryMuted,
   },
-  deleteBtn: {
+
+  dangerActionBtn: {
     backgroundColor: Theme.colors.dangerMuted,
     borderColor: Theme.colors.dangerMuted,
   },
+
+  actionDisabled: {
+    opacity: 0.35,
+  },
+
   actionText: {
     color: Theme.colors.textSecondary,
     fontSize: 12,
-    fontWeight: "800",
-  },
-  deleteText: {
-    color: Theme.colors.danger,
-  },
-  actionsStack: {
-    gap: Theme.spacing.sm,
-    marginTop: Theme.spacing.md,
-  },
-  actionsRow: {
-    flexDirection: "row",
-    gap: Theme.spacing.sm,
-  },
-  vehicleBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    gap: 6,
-    backgroundColor: Theme.colors.surface,
-    borderRadius: Theme.radius.full,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginTop: Theme.spacing.sm,
-    marginBottom: Theme.spacing.md,
+    fontWeight: "900",
   },
 
-  vehicleBadgeText: {
-    color: Theme.colors.textSecondary,
-    fontSize: 11,
-    fontWeight: "800",
+  primaryActionText: {
+    color: Theme.colors.primaryGlow,
+  },
+
+  dangerActionText: {
+    color: Theme.colors.danger,
   },
 });

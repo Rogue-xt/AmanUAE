@@ -62,7 +62,6 @@ export interface ActiveTicket {
   expiryTimestamp: number;
   expiryReminderNotificationId?: string | null;
   expiredNotificationId?: string | null;
-
 }
 
 export interface ParkingSession {
@@ -137,6 +136,7 @@ interface AppContextType {
   restoreFromCloud: (uid: string) => Promise<void>;
   hasRestored: boolean;
   setHasRestored: React.Dispatch<React.SetStateAction<boolean>>;
+  restoredUid: string | null;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -159,7 +159,9 @@ const getStorageKeys = (uid: string) => ({
   activeTicket: `@zonegard_${uid}_active_ticket`,
   parkingSessions: `@zonegard_${uid}_parking_sessions`,
 });
-export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const { user } = useAuth();
   const [vehicles, setVehicles] = useState<VehicleProfile[]>([]);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
@@ -168,6 +170,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [parkingSessions, setParkingSessions] = useState<ParkingSession[]>([]);
   const [hasRestored, setHasRestored] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [restoredUid, setRestoredUid] = useState<string | null>(null);
 
   // 3. Hydration Phase: Load everything from local device memory on app bootup
   // C. Update your initial useEffect hydration block to pull active tickets on bootup
@@ -176,6 +179,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const loadStoredData = async () => {
       if (!user?.uid) {
         resetAppState();
+        setRestoredUid(null);
         setHasRestored(false);
         setIsLoading(false);
         return;
@@ -183,6 +187,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       setIsLoading(true);
       setHasRestored(false);
+      setRestoredUid(null);
       resetAppState();
 
       const keys = getStorageKeys(user.uid);
@@ -248,6 +253,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setActiveTicket(null);
           }
           setHasRestored(true);
+          setRestoredUid(user.uid);
           return;
         }
 
@@ -264,6 +270,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           [keys.parkingSessions, JSON.stringify(cloud.parkingSessions)],
           [keys.activeTicket, JSON.stringify(cloud.activeTicket)],
         ]);
+        setRestoredUid(user.uid);
         setHasRestored(true);
       } catch (error) {
         console.error("Failed to load user data:", error);
@@ -342,13 +349,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-
   const clearParkingSession = async () => {
-
-await cancelNotification(
-  activeTicket?.expiryReminderNotificationId ?? undefined,
-);
-await cancelNotification(activeTicket?.expiredNotificationId ?? undefined);
+    await cancelNotification(
+      activeTicket?.expiryReminderNotificationId ?? undefined,
+    );
+    await cancelNotification(activeTicket?.expiredNotificationId ?? undefined);
     try {
       if (activeTicket) {
         const now = Date.now();
@@ -384,41 +389,40 @@ await cancelNotification(activeTicket?.expiredNotificationId ?? undefined);
     }
   };
 
- const deleteVehicle = async (id: string) => {
-   try {
-     const updatedVehicles = vehicles.filter((v) => v.id !== id);
+  const deleteVehicle = async (id: string) => {
+    try {
+      const updatedVehicles = vehicles.filter((v) => v.id !== id);
 
-     const updatedDocs = documents.map((doc) =>
-       doc.vehicleId === id ? { ...doc, vehicleId: "" } : doc,
-     );
+      const updatedDocs = documents.map((doc) =>
+        doc.vehicleId === id ? { ...doc, vehicleId: "" } : doc,
+      );
 
-     setVehicles(updatedVehicles);
-     setDocuments(updatedDocs);
+      setVehicles(updatedVehicles);
+      setDocuments(updatedDocs);
 
-     if (!user?.uid) return;
+      if (!user?.uid) return;
 
-     const keys = getStorageKeys(user.uid);
+      const keys = getStorageKeys(user.uid);
 
-     await AsyncStorage.multiSet([
-       [keys.vehicles, JSON.stringify(updatedVehicles)],
-       [keys.documents, JSON.stringify(updatedDocs)],
-     ]);
+      await AsyncStorage.multiSet([
+        [keys.vehicles, JSON.stringify(updatedVehicles)],
+        [keys.documents, JSON.stringify(updatedDocs)],
+      ]);
 
-     await CloudService.deleteVehicle(user.uid, id);
+      await CloudService.deleteVehicle(user.uid, id);
 
-     await Promise.all(
-       updatedDocs
-         .filter(
-           (doc) =>
-             documents.find((old) => old.id === doc.id)?.vehicleId === id,
-         )
-         .map((doc) => CloudService.saveDocument(user.uid, doc)),
-     );
-   } catch (error) {
-     console.error("Failed to delete vehicle:", error);
-   }
- };
-
+      await Promise.all(
+        updatedDocs
+          .filter(
+            (doc) =>
+              documents.find((old) => old.id === doc.id)?.vehicleId === id,
+          )
+          .map((doc) => CloudService.saveDocument(user.uid, doc)),
+      );
+    } catch (error) {
+      console.error("Failed to delete vehicle:", error);
+    }
+  };
 
   // 4. Vehicle Operations with Auto-Save Flushing
   const addVehicle = async (newVehicle: Omit<VehicleProfile, "id">) => {
@@ -498,128 +502,128 @@ await cancelNotification(activeTicket?.expiredNotificationId ?? undefined);
     }
   };
   // 5. Document Operations with Auto-Save Flushing
-const addDocument = async (
-  newDoc: Omit<DocumentRecord, "id" | "createdAt">,
-) => {
-  try {
-    if (!user?.uid) return;
+  const addDocument = async (
+    newDoc: Omit<DocumentRecord, "id" | "createdAt">,
+  ) => {
+    try {
+      if (!user?.uid) return;
 
-    const documentId = Date.now().toString();
-    const notificationIds = await scheduleDocumentExpiryReminders({
-      documentId,
-      title: newDoc.title,
-      expiryDate: newDoc.expiryDate,
-    });
-    let fileUrl = newDoc.fileUrl;
-
-    if (newDoc.fileUri && !newDoc.fileUri.startsWith("http")) {
-      fileUrl = await CloudService.uploadDocumentFile(
-        user.uid,
+      const documentId = Date.now().toString();
+      const notificationIds = await scheduleDocumentExpiryReminders({
         documentId,
-        newDoc.fileUri,
-        newDoc.fileName,
-        newDoc.mimeType,
-      );
+        title: newDoc.title,
+        expiryDate: newDoc.expiryDate,
+      });
+      let fileUrl = newDoc.fileUrl;
+
+      if (newDoc.fileUri && !newDoc.fileUri.startsWith("http")) {
+        fileUrl = await CloudService.uploadDocumentFile(
+          user.uid,
+          documentId,
+          newDoc.fileUri,
+          newDoc.fileName,
+          newDoc.mimeType,
+        );
+      }
+
+      const docWithId: DocumentRecord = {
+        ...newDoc,
+        id: documentId,
+        fileUrl,
+        notificationIds,
+        createdAt: Date.now(),
+      };
+
+      const updatedDocs = [...documents, docWithId];
+
+      setDocuments(updatedDocs);
+
+      const keys = getStorageKeys(user.uid);
+      await AsyncStorage.setItem(keys.documents, JSON.stringify(updatedDocs));
+    } catch (error) {
+      console.error("Failed to save document profile entry:", error);
     }
-
-    const docWithId: DocumentRecord = {
-      ...newDoc,
-      id: documentId,
-      fileUrl,
-      notificationIds,
-      createdAt: Date.now(),
-    };
-
-    const updatedDocs = [...documents, docWithId];
-
-    setDocuments(updatedDocs);
-
-    const keys = getStorageKeys(user.uid);
-    await AsyncStorage.setItem(keys.documents, JSON.stringify(updatedDocs));
-  } catch (error) {
-    console.error("Failed to save document profile entry:", error);
-  }
-};
+  };
 
   //Delete doc
-const deleteDocument = async (id: string) => {
-  try {
-    const existingDoc = documents.find((doc) => doc.id === id);
+  const deleteDocument = async (id: string) => {
+    try {
+      const existingDoc = documents.find((doc) => doc.id === id);
 
-    await cancelDocumentExpiryReminders(existingDoc?.notificationIds);
-
-    const updatedDocs = documents.filter((d) => d.id !== id);
-
-    setDocuments(updatedDocs);
-
-    if (!user?.uid) return;
-
-    const keys = getStorageKeys(user.uid);
-
-    await AsyncStorage.setItem(keys.documents, JSON.stringify(updatedDocs));
-
-    await CloudService.deleteDocument(user.uid, id);
-  } catch (error) {
-    console.error("Failed to delete document:", error);
-  }
-};
-
-  // update doc.
-const updateDocument = async (
-  id: string,
-  payload: Partial<Omit<DocumentRecord, "id" | "createdAt">>,
-) => {
-  try {
-    if (!user?.uid) return;
-
-    const existingDoc = documents.find((doc) => doc.id === id);
-
-    let fileUrl = payload.fileUrl;
-
-    if (payload.fileUri && !payload.fileUri.startsWith("http")) {
-      fileUrl = await CloudService.uploadDocumentFile(
-        user.uid,
-        id,
-        payload.fileUri,
-        payload.fileName,
-        payload.mimeType,
-      );
-    }
-
-    let notificationIds = existingDoc?.notificationIds || [];
-
-    const expiryChanged =
-      !!payload.expiryDate && payload.expiryDate !== existingDoc?.expiryDate;
-
-    if (expiryChanged && payload.expiryDate) {
       await cancelDocumentExpiryReminders(existingDoc?.notificationIds);
 
-      notificationIds = await scheduleDocumentExpiryReminders({
-        documentId: id,
-        title: payload.title || existingDoc?.title || "Document",
-        expiryDate: payload.expiryDate,
-      });
+      const updatedDocs = documents.filter((d) => d.id !== id);
+
+      setDocuments(updatedDocs);
+
+      if (!user?.uid) return;
+
+      const keys = getStorageKeys(user.uid);
+
+      await AsyncStorage.setItem(keys.documents, JSON.stringify(updatedDocs));
+
+      await CloudService.deleteDocument(user.uid, id);
+    } catch (error) {
+      console.error("Failed to delete document:", error);
     }
+  };
 
-    const updatedDocs = documents.map((doc) =>
-      doc.id === id
-        ? {
-            ...doc,
-            ...payload,
-            fileUrl: fileUrl ?? doc.fileUrl,
-            notificationIds,
-          }
-        : doc,
-    );
+  // update doc.
+  const updateDocument = async (
+    id: string,
+    payload: Partial<Omit<DocumentRecord, "id" | "createdAt">>,
+  ) => {
+    try {
+      if (!user?.uid) return;
 
-    setDocuments(updatedDocs);
+      const existingDoc = documents.find((doc) => doc.id === id);
 
-    const keys = getStorageKeys(user.uid);
-    await AsyncStorage.setItem(keys.documents, JSON.stringify(updatedDocs));
-  } catch (error) {
-    console.error("Failed to update document record:", error);
-  }
-};
+      let fileUrl = payload.fileUrl;
+
+      if (payload.fileUri && !payload.fileUri.startsWith("http")) {
+        fileUrl = await CloudService.uploadDocumentFile(
+          user.uid,
+          id,
+          payload.fileUri,
+          payload.fileName,
+          payload.mimeType,
+        );
+      }
+
+      let notificationIds = existingDoc?.notificationIds || [];
+
+      const expiryChanged =
+        !!payload.expiryDate && payload.expiryDate !== existingDoc?.expiryDate;
+
+      if (expiryChanged && payload.expiryDate) {
+        await cancelDocumentExpiryReminders(existingDoc?.notificationIds);
+
+        notificationIds = await scheduleDocumentExpiryReminders({
+          documentId: id,
+          title: payload.title || existingDoc?.title || "Document",
+          expiryDate: payload.expiryDate,
+        });
+      }
+
+      const updatedDocs = documents.map((doc) =>
+        doc.id === id
+          ? {
+              ...doc,
+              ...payload,
+              fileUrl: fileUrl ?? doc.fileUrl,
+              notificationIds,
+            }
+          : doc,
+      );
+
+      setDocuments(updatedDocs);
+
+      const keys = getStorageKeys(user.uid);
+      await AsyncStorage.setItem(keys.documents, JSON.stringify(updatedDocs));
+    } catch (error) {
+      console.error("Failed to update document record:", error);
+    }
+  };
 
   const resetAppState = () => {
     setVehicles([]);
@@ -641,6 +645,7 @@ const updateDocument = async (
     try {
       setIsLoading(true);
       setHasRestored(false);
+      setRestoredUid(null);
       resetAppState();
 
       const keys = getStorageKeys(uid);
@@ -657,7 +662,7 @@ const updateDocument = async (
         [keys.parkingSessions, JSON.stringify(cloud.parkingSessions)],
         [keys.activeTicket, JSON.stringify(cloud.activeTicket)],
       ]);
-
+      setRestoredUid(uid);
       setHasRestored(true);
     } catch (error) {
       console.error("Failed to restore from cloud:", error);
@@ -685,13 +690,14 @@ const updateDocument = async (
         resetAppState,
         restoreFromCloud,
         hasRestored,
+        restoredUid,
         setHasRestored,
       }}
     >
       {children}
     </AppContext.Provider>
   );
-};;
+};
 
 // 6. Custom React Hook interface for instant screen data streaming
 export const useApp = () => {
