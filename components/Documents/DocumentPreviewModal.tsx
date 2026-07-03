@@ -11,6 +11,7 @@ type Props = {
 
 export function DocumentPreviewModal({ document, onClose }: Props) {
   console.log("PREVIEW MODAL DOC", document?.fileUri);
+    const previewUri = document?.fileUrl || document?.fileUri;
   return (
     <Modal
       visible={!!document}
@@ -30,15 +31,9 @@ export function DocumentPreviewModal({ document, onClose }: Props) {
           </Pressable>
         </View>
 
-        {document?.fileUri && (
-          // <Image
-          //   source={{ uri: document.fileUri }}
-          //   style={styles.image}
-          //   resizeMode="contain"
-          // />
-
+        {previewUri && (
           <Image
-            source={document.fileUrl || document.fileUri}
+            source={previewUri}
             style={styles.image}
             contentFit="contain"
           />

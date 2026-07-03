@@ -394,7 +394,7 @@ const smsPreview = useMemo(() => {
                   emirate={car.emirate}
                   plateCode={car.plateCode}
                   plateNumber={car.plateNumber}
-                  imageUri={car.imageUri}
+                  imageUri={car.imageUrl || car.imageUri}
                   imageName={car.imageName}
                   compact
                   selected={car.id === selectedVehicleId}

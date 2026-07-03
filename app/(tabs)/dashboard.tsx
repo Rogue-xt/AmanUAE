@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import * as Notifications from "expo-notifications";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { useApp, VehicleProfile } from "../../src/context/AppContext";
 import { Theme } from "@/constants/Theme";
@@ -67,6 +69,8 @@ export default function DashboardScreen() {
       };
     }
 
+
+
     const totalSeconds = Math.floor(remainingMs / 1000);
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
@@ -115,6 +119,19 @@ export default function DashboardScreen() {
         ? Theme.colors.warning
         : Theme.colors.danger;
 
+const testNotification = async () => {
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: "ZoneGard Test",
+      body: "Notifications are working.",
+      data: { screen: "dashboard" },
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: 5,
+    },
+  });
+};   
   return (
     <ScreenContainer>
       <ScrollView
@@ -136,6 +153,9 @@ export default function DashboardScreen() {
           </View>
           <Text style={styles.greeting}>{getGreeting()}</Text>
         </FadeInView>
+        <Pressable onPress={testNotification}>
+          <Text>Test Notification</Text>
+        </Pressable>
 
         <FadeInView delay={80}>
           <View style={styles.summaryRow}>

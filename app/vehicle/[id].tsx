@@ -15,6 +15,10 @@ import { Image } from "expo-image";
 import { Stack } from "expo-router";
 import { VehicleEditModal } from "@/components/vehicles/VehicleEditModal";
 import { DocumentVehicleLinkModal } from "@/components/Documents/DocumentVehicleLinkModal";
+import {
+  prepareFileForSharing,
+  openFileWithViewer,
+} from "@/src/services/documentFileService";
 const getDaysRemaining = (expiryDate: string) => {
   const today = new Date();
   const expiry = new Date(`${expiryDate}T00:00:00`);
@@ -99,7 +103,9 @@ export default function VehicleDetailsScreen() {
   }, [documents, id]);
 
   const handleViewDocument = async (doc: DocumentRecord) => {
-    if (!doc.fileUri) {
+    const sourceUri = doc.fileUrl || doc.fileUri;
+
+    if (!sourceUri) {
       Alert.alert("No File", "This document has no attached file.");
       return;
     }
@@ -125,27 +131,38 @@ export default function VehicleDetailsScreen() {
       return;
     }
 
-    await Sharing.shareAsync(doc.fileUri, {
-      mimeType: doc.mimeType,
-      dialogTitle: "Open document",
-    });
+await openFileWithViewer(sourceUri, doc.fileName, doc.mimeType);
+
   };
 
-  const handleShareDocument = async (doc: DocumentRecord) => {
-    if (!doc.fileUri) {
-      Alert.alert("No File", "This document has no attached file.");
-      return;
-    }
+ const handleShareDocument = async (doc: DocumentRecord) => {
+   const sourceUri = doc.fileUrl || doc.fileUri;
 
-    const available = await Sharing.isAvailableAsync();
+   if (!sourceUri) {
+     Alert.alert("No File", "This tracker has no attached document.");
+     return;
+   }
 
-    if (!available) {
-      Alert.alert("Sharing Unavailable", "Sharing is not available here.");
-      return;
-    }
+   try {
+     const available = await Sharing.isAvailableAsync();
 
-    await Sharing.shareAsync(doc.fileUri);
-  };
+     if (!available) {
+       Alert.alert("Sharing Unavailable", "Sharing is not available here.");
+       return;
+     }
+
+     const shareUri = await prepareFileForSharing(sourceUri, doc.fileName);
+
+     await Sharing.shareAsync(shareUri, {
+       mimeType: doc.mimeType,
+       dialogTitle: "Share document",
+     });
+   } catch (error) {
+     console.error("Failed to share document:", error);
+     Alert.alert("Share Failed", "Could not share this document.");
+   }
+ };
+
   const handleSaveVehicleEdit = async () => {
     if (!vehicle) return;
 

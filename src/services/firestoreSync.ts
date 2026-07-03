@@ -35,9 +35,7 @@ export async function saveVehicleToCloud(uid: string, vehicle: VehicleProfile) {
 
   await setDoc(ref, removeUndefinedFields(vehicle));
 }
-export async function deleteVehicleFromCloud(uid: string, vehicleId: string) {
-  await deleteDoc(doc(userDoc(uid), "vehicles", vehicleId));
-}
+
 export async function saveDocumentToCloud(
   uid: string,
   documentData: DocumentRecord,
@@ -48,9 +46,7 @@ export async function saveDocumentToCloud(
   );
 }
 
-export async function deleteDocumentFromCloud(uid: string, documentId: string) {
-  await deleteDoc(doc(userDoc(uid), "documents", documentId));
-}
+
 
 export async function saveParkingSessionToCloud(
   uid: string,
@@ -71,6 +67,21 @@ export async function saveActiveTicketToCloud(
   });
 }
 
+
+export async function deleteVehicleFromCloud(uid: string, vehicleId: string) {
+  await deleteDoc(doc(db, "users", uid, "vehicles", vehicleId));
+}
+
+export async function deleteDocumentFromCloud(uid: string, documentId: string) {
+  await deleteDoc(doc(db, "users", uid, "documents", documentId));
+}
+
+export async function deleteParkingSessionFromCloud(
+  uid: string,
+  sessionId: string,
+) {
+  await deleteDoc(doc(db, "users", uid, "parkingSessions", sessionId));
+}
 export async function loadCloudBackup(uid: string): Promise<CloudBackup> {
   const [vehiclesSnap, documentsSnap, sessionsSnap, activeTicketSnap] =
     await Promise.all([

@@ -11,6 +11,9 @@ import {
   saveDocumentToCloud,
   saveParkingSessionToCloud,
   saveVehicleToCloud,
+  deleteVehicleFromCloud,
+  deleteDocumentFromCloud,
+  deleteParkingSessionFromCloud,
 } from "@/src/services/firestoreSync";
 
 import {
@@ -44,7 +47,18 @@ export const CloudService = {
   uploadVehicleImage(uid: string, vehicleId: string, imageUri: string) {
     return uploadVehicleImageToSupabase(uid, vehicleId, imageUri);
   },
+  deleteVehicle(uid: string, vehicleId: string) {
+    return deleteVehicleFromCloud(uid, vehicleId);
+  },
 
+  deleteDocument(uid: string, documentId: string) {
+    return deleteDocumentFromCloud(uid, documentId);
+  },
+
+  deleteParkingSession(uid: string, sessionId: string) {
+    return deleteParkingSessionFromCloud(uid, sessionId);
+  },
+  
   uploadDocumentFile(
     uid: string,
     documentId: string,

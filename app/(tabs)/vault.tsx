@@ -42,6 +42,10 @@ import { DocumentCard } from "@/components/Documents/DocumentCard";
 import { DocumentEditModal } from "@/components/Documents/DocumentEditModal";
 import { DocumentPreviewModal } from "@/components/Documents/DocumentPreviewModal";
 import { DocumentVehicleLinkModal } from "@/components/Documents/DocumentVehicleLinkModal";
+import {
+  prepareFileForSharing,
+  openFileWithViewer,
+} from "@/src/services/documentFileService";
 
 const DOCUMENT_TYPES: DocumentRecord["type"][] = [
   "EmiratesID",
@@ -208,10 +212,12 @@ export default function VaultScreen() {
 
 
   const handleViewDocument = async (doc: DocumentRecord) => {
-    if (!doc.fileUri) {
-      Alert.alert("No File", "This tracker has no attached document.");
-      return;
-    }
+   const sourceUri = doc.fileUrl || doc.fileUri;
+
+   if (!sourceUri) {
+     Alert.alert("No File", "This tracker has no attached document.");
+     return;
+   }
 
     const fileName = doc.fileName?.toLowerCase() ?? "";
     const mimeType = doc.mimeType?.toLowerCase() ?? "";
@@ -249,31 +255,40 @@ export default function VaultScreen() {
         );
         return;
       }
+await openFileWithViewer(sourceUri, doc.fileName, doc.mimeType);
 
-      await Sharing.shareAsync(doc.fileUri, {
-        mimeType: doc.mimeType,
-        dialogTitle: "Open document",
-      });
     } catch (error) {
       console.error("Failed to open document:", error);
       Alert.alert("Open Failed", "Could not open this document.");
     }
   };
 
-  const handleShareDocument = async (doc: DocumentRecord) => {
-    if (!doc.fileUri) {
-      Alert.alert("No File", "This tracker has no attached document.");
-      return;
-    }
+const handleShareDocument = async (doc: DocumentRecord) => {
+  const sourceUri = doc.fileUrl || doc.fileUri;
 
+  if (!sourceUri) {
+    Alert.alert("No File", "This tracker has no attached document.");
+    return;
+  }
+
+  try {
     const available = await Sharing.isAvailableAsync();
+
     if (!available) {
       Alert.alert("Sharing Unavailable", "Sharing is not available here.");
       return;
     }
+    const shareUri = await prepareFileForSharing(sourceUri, doc.fileName);
 
-    await Sharing.shareAsync(doc.fileUri);
-  };
+    await Sharing.shareAsync(shareUri, {
+      mimeType: doc.mimeType,
+      dialogTitle: "Share document",
+    });
+  } catch (error) {
+    console.error("Failed to share document:", error);
+    Alert.alert("Share Failed", "Could not share this document.");
+  }
+};
 
   const handleDeleteDocument = (doc: DocumentRecord) => {
     Alert.alert("Delete Document", `Remove "${doc.title}" from vault?`, [

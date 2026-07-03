@@ -2,10 +2,13 @@ import React, { createContext, useState, useEffect, useContext } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@/src/context/AuthContext";
 import { CloudService } from "@/src/services/cloudService";
-// import * as Notifications from "expo-notifications";
-
-// 1. Define the structural blueprints for our data models
-
+import {
+  cancelNotification,
+  cancelDocumentExpiryReminders,
+  scheduleDocumentExpiryReminders,
+  scheduleParkingExpiredReminder,
+  scheduleParkingExpiryReminder,
+} from "@/src/services/notificationService";
 export interface VehicleProfile {
   id: string;
   label: string;
@@ -47,8 +50,8 @@ export interface DocumentRecord {
   mimeType?: string;
   fileSize?: number;
   vehicleId?: string;
-
   createdAt: number;
+  notificationIds?: string[];
 }
 // 1. Add this interface model right next to your other interface models at the top
 export interface ActiveTicket {
@@ -56,7 +59,10 @@ export interface ActiveTicket {
   vehicleLabel: string;
   plateDetails: string;
   parkingEmirate: string;
-  expiryTimestamp: number; // Unix timestamp in milliseconds when the ticket expires
+  expiryTimestamp: number;
+  expiryReminderNotificationId?: string | null;
+  expiredNotificationId?: string | null;
+
 }
 
 export interface ParkingSession {
@@ -71,6 +77,8 @@ export interface ParkingSession {
   expiryTimestamp: number;
   endedAt?: number;
   status: "active" | "completed" | "expired";
+  expiryReminderNotificationId?: string | null;
+  expiredNotificationId?: string | null;
 }
 export interface StartParkingSessionInput {
   vehicleId?: string;
@@ -85,6 +93,22 @@ export interface StartParkingSessionInput {
   startedAt: number;
   expiryTimestamp: number;
 }
+
+export type NotificationItem = {
+  id: string;
+  title: string;
+  body: string;
+  type: "parking" | "document" | "system" | "success" | "warning";
+
+  createdAt: number;
+
+  read: boolean;
+
+  action?: {
+    screen: string;
+    id?: string;
+  };
+};
 // 2. Define exactly what functions and data are available globally
 interface AppContextType {
   vehicles: VehicleProfile[];
@@ -143,6 +167,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeTicket, setActiveTicket] = useState<ActiveTicket | null>(null);
   const [parkingSessions, setParkingSessions] = useState<ParkingSession[]>([]);
   const [hasRestored, setHasRestored] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
   // 3. Hydration Phase: Load everything from local device memory on app bootup
   // C. Update your initial useEffect hydration block to pull active tickets on bootup
@@ -281,6 +306,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         expiryTimestamp: newTicket.expiryTimestamp,
         status: "active",
       };
+      const expiryReminderNotificationId = await scheduleParkingExpiryReminder({
+        sessionId: completeTicket.id,
+        vehicleLabel: completeTicket.vehicleLabel,
+        parkingEmirate: completeTicket.parkingEmirate,
+        expiryTimestamp: completeTicket.expiryTimestamp,
+      });
+
+      const expiredNotificationId = await scheduleParkingExpiredReminder({
+        sessionId: completeTicket.id,
+        vehicleLabel: completeTicket.vehicleLabel,
+        parkingEmirate: completeTicket.parkingEmirate,
+        expiryTimestamp: completeTicket.expiryTimestamp,
+      });
+
+      completeTicket.expiryReminderNotificationId =
+        expiryReminderNotificationId;
+      completeTicket.expiredNotificationId = expiredNotificationId;
+
+      sessionRecord.expiryReminderNotificationId = expiryReminderNotificationId;
+      sessionRecord.expiredNotificationId = expiredNotificationId;
 
       const updatedSessions = [sessionRecord, ...parkingSessions];
 
@@ -296,16 +341,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.error("Failed to initialize tracking countdown layer:", error);
     }
   };
+
+
   const clearParkingSession = async () => {
-    //   const notificationId = await AsyncStorage.getItem(
-    //     TICKET_NOTIFICATION_KEY,
-    //   );
 
-    //   if (notificationId) {
-    //     await Notifications.cancelScheduledNotificationAsync(notificationId);
-    //     await AsyncStorage.removeItem(TICKET_NOTIFICATION_KEY);
-    //   }
-
+await cancelNotification(
+  activeTicket?.expiryReminderNotificationId ?? undefined,
+);
+await cancelNotification(activeTicket?.expiredNotificationId ?? undefined);
     try {
       if (activeTicket) {
         const now = Date.now();
@@ -341,20 +384,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const deleteVehicle = async (id: string) => {
-    try {
-      const updatedVehicles = vehicles.filter((v) => v.id !== id);
-      setVehicles(updatedVehicles);
-      if (!user?.uid) return;
-      const keys = getStorageKeys(user.uid);
-      await AsyncStorage.setItem(
-        keys.vehicles,
-        JSON.stringify(updatedVehicles),
-      );
-    } catch (error) {
-      console.error("Failed to update vehicle log entry deletion:", error);
-    }
-  };
+ const deleteVehicle = async (id: string) => {
+   try {
+     const updatedVehicles = vehicles.filter((v) => v.id !== id);
+
+     const updatedDocs = documents.map((doc) =>
+       doc.vehicleId === id ? { ...doc, vehicleId: "" } : doc,
+     );
+
+     setVehicles(updatedVehicles);
+     setDocuments(updatedDocs);
+
+     if (!user?.uid) return;
+
+     const keys = getStorageKeys(user.uid);
+
+     await AsyncStorage.multiSet([
+       [keys.vehicles, JSON.stringify(updatedVehicles)],
+       [keys.documents, JSON.stringify(updatedDocs)],
+     ]);
+
+     await CloudService.deleteVehicle(user.uid, id);
+
+     await Promise.all(
+       updatedDocs
+         .filter(
+           (doc) =>
+             documents.find((old) => old.id === doc.id)?.vehicleId === id,
+         )
+         .map((doc) => CloudService.saveDocument(user.uid, doc)),
+     );
+   } catch (error) {
+     console.error("Failed to delete vehicle:", error);
+   }
+ };
+
+
   // 4. Vehicle Operations with Auto-Save Flushing
   const addVehicle = async (newVehicle: Omit<VehicleProfile, "id">) => {
     try {
@@ -440,6 +505,11 @@ const addDocument = async (
     if (!user?.uid) return;
 
     const documentId = Date.now().toString();
+    const notificationIds = await scheduleDocumentExpiryReminders({
+      documentId,
+      title: newDoc.title,
+      expiryDate: newDoc.expiryDate,
+    });
     let fileUrl = newDoc.fileUrl;
 
     if (newDoc.fileUri && !newDoc.fileUri.startsWith("http")) {
@@ -456,6 +526,7 @@ const addDocument = async (
       ...newDoc,
       id: documentId,
       fileUrl,
+      notificationIds,
       createdAt: Date.now(),
     };
 
@@ -471,17 +542,27 @@ const addDocument = async (
 };
 
   //Delete doc
-  const deleteDocument = async (id: string) => {
-    try {
-      const updatedDocs = documents.filter((d) => d.id !== id);
-      setDocuments(updatedDocs);
-      if (!user?.uid) return;
-      const keys = getStorageKeys(user.uid);
-      await AsyncStorage.setItem(keys.documents, JSON.stringify(updatedDocs));
-    } catch (error) {
-      console.error("Failed to process document profile erasure:", error);
-    }
-  };
+const deleteDocument = async (id: string) => {
+  try {
+    const existingDoc = documents.find((doc) => doc.id === id);
+
+    await cancelDocumentExpiryReminders(existingDoc?.notificationIds);
+
+    const updatedDocs = documents.filter((d) => d.id !== id);
+
+    setDocuments(updatedDocs);
+
+    if (!user?.uid) return;
+
+    const keys = getStorageKeys(user.uid);
+
+    await AsyncStorage.setItem(keys.documents, JSON.stringify(updatedDocs));
+
+    await CloudService.deleteDocument(user.uid, id);
+  } catch (error) {
+    console.error("Failed to delete document:", error);
+  }
+};
 
   // update doc.
 const updateDocument = async (
@@ -490,6 +571,8 @@ const updateDocument = async (
 ) => {
   try {
     if (!user?.uid) return;
+
+    const existingDoc = documents.find((doc) => doc.id === id);
 
     let fileUrl = payload.fileUrl;
 
@@ -503,12 +586,28 @@ const updateDocument = async (
       );
     }
 
+    let notificationIds = existingDoc?.notificationIds || [];
+
+    const expiryChanged =
+      !!payload.expiryDate && payload.expiryDate !== existingDoc?.expiryDate;
+
+    if (expiryChanged && payload.expiryDate) {
+      await cancelDocumentExpiryReminders(existingDoc?.notificationIds);
+
+      notificationIds = await scheduleDocumentExpiryReminders({
+        documentId: id,
+        title: payload.title || existingDoc?.title || "Document",
+        expiryDate: payload.expiryDate,
+      });
+    }
+
     const updatedDocs = documents.map((doc) =>
       doc.id === id
         ? {
             ...doc,
             ...payload,
             fileUrl: fileUrl ?? doc.fileUrl,
+            notificationIds,
           }
         : doc,
     );
@@ -521,7 +620,6 @@ const updateDocument = async (
     console.error("Failed to update document record:", error);
   }
 };
-
 
   const resetAppState = () => {
     setVehicles([]);
