@@ -55,6 +55,13 @@ export default function ParkingSessionsScreen() {
                 <Text style={styles.clearText}>Clear</Text>
               </Pressable>
             ) : null,
+          headerStyle: {
+            backgroundColor: Theme.colors.primary,
+          },
+          headerTintColor: "#000",
+          headerTitleStyle: {
+            fontWeight: "700",
+          },
         }}
       />
 

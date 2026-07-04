@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -116,135 +118,145 @@ export function VehicleEditModal({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
-        <View style={styles.card}>
-          <View style={styles.sheetHandle} />
+      <KeyboardAvoidingView
+        style={styles.overlay}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
+      >
+        {/* <View style={styles.overlay}> */}
+          <View style={styles.card}>
+            <View style={styles.sheetHandle} />
 
-          <View style={styles.formHeader}>
-            <View style={styles.modalHeaderText}>
-              <Text style={styles.modalTitle}>
-                {mode === "edit" ? "Edit Vehicle" : "Add Vehicle"}
-              </Text>
-              <Text style={styles.modalSubtitle}>
-                Save plate details for fast UAE parking.
-              </Text>
-            </View>
-
-            <Pressable style={styles.closeCircle} onPress={onClose}>
-              <FontAwesome6
-                name="xmark"
-                size={16}
-                color={Theme.colors.textPrimary}
-              />
-            </Pressable>
-          </View>
-
-          <ScrollView showsVerticalScrollIndicator={false}>
-            <TextInput
-              style={styles.input}
-              placeholder="Vehicle label, e.g. Nissan"
-              placeholderTextColor={Theme.colors.textMuted}
-              value={label}
-              onChangeText={setLabel}
-            />
-
-            <Text style={styles.fieldLabel}>Plate Emirate</Text>
-            <SegmentedChips
-              options={emirateOptions}
-              selected={selectedEmirate}
-              onSelect={(value) =>
-                setSelectedEmirate(value as VehicleProfile["emirate"])
-              }
-              horizontal
-            />
-
-            <View style={styles.plateRow}>
-              <TextInput
-                style={[styles.input, styles.plateCodeInput]}
-                placeholder="Code"
-                placeholderTextColor={Theme.colors.textMuted}
-                value={plateCode}
-                onChangeText={setPlateCode}
-                autoCapitalize="characters"
-              />
-
-              <TextInput
-                style={[styles.input, styles.plateNumberInput]}
-                placeholder="Plate number"
-                placeholderTextColor={Theme.colors.textMuted}
-                value={plateNumber}
-                onChangeText={setPlateNumber}
-                keyboardType="number-pad"
-              />
-            </View>
-
-            <Pressable
-              style={styles.vehicleImagePicker}
-              onPress={handlePickVehicleImage}
-            >
-              {pickedVehicleImage?.imageUri ? (
-                <Image
-                  source={{ uri: pickedVehicleImage.imageUri }}
-                  style={styles.vehicleImagePreview}
-                  contentFit="cover"
-                />
-              ) : (
-                <View style={styles.vehicleImagePlaceholder}>
-                  <FontAwesome6
-                    name="image"
-                    size={20}
-                    color={Theme.colors.primaryGlow}
-                  />
-                </View>
-              )}
-
-              <View style={styles.vehicleImageTextWrap}>
-                <Text style={styles.vehicleImageTitle}>
-                  {pickedVehicleImage?.imageName
-                    ? "Vehicle Image Selected"
-                    : "Add Vehicle Image"}
+            <View style={styles.formHeader}>
+              <View style={styles.modalHeaderText}>
+                <Text style={styles.modalTitle}>
+                  {mode === "edit" ? "Edit Vehicle" : "Add Vehicle"}
                 </Text>
-                <Text style={styles.vehicleImageSub} numberOfLines={1}>
-                  {pickedVehicleImage?.imageName ||
-                    "Optional, useful for quick recognition"}
+                <Text style={styles.modalSubtitle}>
+                  Save plate details for fast UAE parking.
                 </Text>
               </View>
-            </Pressable>
 
-            <PrimaryButton
-              label={mode === "edit" ? "Update Vehicle" : "Save Vehicle"}
-              onPress={handleSave}
-              variant="success"
-              icon={
+              <Pressable style={styles.closeCircle} onPress={onClose}>
                 <FontAwesome6
-                  name="shield"
-                  size={14}
+                  name="xmark"
+                  size={16}
                   color={Theme.colors.textPrimary}
                 />
-              }
-            />
-          </ScrollView>
-        </View>
-      </View>
+              </Pressable>
+            </View>
+
+            <ScrollView
+              contentContainerStyle={styles.scroll}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <TextInput
+                style={styles.input}
+                placeholder="Vehicle label, e.g. Nissan"
+                placeholderTextColor={Theme.colors.textMuted}
+                value={label}
+                onChangeText={setLabel}
+              />
+
+              <Text style={styles.fieldLabel}>Plate Emirate</Text>
+              <SegmentedChips
+                options={emirateOptions}
+                selected={selectedEmirate}
+                onSelect={(value) =>
+                  setSelectedEmirate(value as VehicleProfile["emirate"])
+                }
+                horizontal
+              />
+
+              <View style={styles.plateRow}>
+                <TextInput
+                  style={[styles.input, styles.plateCodeInput]}
+                  placeholder="Code"
+                  placeholderTextColor={Theme.colors.textMuted}
+                  value={plateCode}
+                  onChangeText={setPlateCode}
+                  autoCapitalize="characters"
+                />
+
+                <TextInput
+                  style={[styles.input, styles.plateNumberInput]}
+                  placeholder="Plate number"
+                  placeholderTextColor={Theme.colors.textMuted}
+                  value={plateNumber}
+                  onChangeText={setPlateNumber}
+                  keyboardType="number-pad"
+                />
+              </View>
+
+              <Pressable
+                style={styles.vehicleImagePicker}
+                onPress={handlePickVehicleImage}
+              >
+                {pickedVehicleImage?.imageUri ? (
+                  <Image
+                    source={{ uri: pickedVehicleImage.imageUri }}
+                    style={styles.vehicleImagePreview}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <View style={styles.vehicleImagePlaceholder}>
+                    <FontAwesome6
+                      name="image"
+                      size={20}
+                      color={Theme.colors.primaryGlow}
+                    />
+                  </View>
+                )}
+
+                <View style={styles.vehicleImageTextWrap}>
+                  <Text style={styles.vehicleImageTitle}>
+                    {pickedVehicleImage?.imageName
+                      ? "Vehicle Image Selected"
+                      : "Add Vehicle Image"}
+                  </Text>
+                  <Text style={styles.vehicleImageSub} numberOfLines={1}>
+                    {pickedVehicleImage?.imageName ||
+                      "Optional, useful for quick recognition"}
+                  </Text>
+                </View>
+              </Pressable>
+
+              <PrimaryButton
+                label={mode === "edit" ? "Update Vehicle" : "Save Vehicle"}
+                onPress={handleSave}
+                variant="success"
+                icon={
+                  <FontAwesome6
+                    name="shield"
+                    size={14}
+                    color={Theme.colors.textPrimary}
+                  />
+                }
+              />
+            </ScrollView>
+          </View>
+        {/* </View> */}
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.72)",
-    justifyContent: "flex-end",
-  },
-  card: {
-    maxHeight: "88%",
-    backgroundColor: Theme.colors.background,
-    borderTopLeftRadius: Theme.radius.xl,
-    borderTopRightRadius: Theme.radius.xl,
-    padding: Theme.spacing.lg,
-    borderWidth: 1,
-    borderColor: Theme.colors.border,
-  },
+  // overlay: {
+  //   flex: 1,
+  //   backgroundColor: "rgba(0,0,0,0.72)",
+  //   justifyContent: "flex-end",
+  // },
+  // card: {
+  //   maxHeight: "88%",
+  //   backgroundColor: Theme.colors.background,
+  //   borderTopLeftRadius: Theme.radius.xl,
+  //   borderTopRightRadius: Theme.radius.xl,
+  //   padding: Theme.spacing.lg,
+  //   borderWidth: 1,
+  //   borderColor: Theme.colors.border,
+  // },
   sheetHandle: {
     width: 50,
     height: 5,
@@ -351,5 +363,29 @@ const styles = StyleSheet.create({
     color: Theme.colors.textSecondary,
     fontSize: 12,
     marginTop: 4,
+  },
+  // scroll: {
+  //   flexGrow: 1,
+  //   justifyContent: "center",
+  // },
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.72)",
+    justifyContent: "flex-end",
+  },
+
+  card: {
+    maxHeight: "88%",
+    backgroundColor: Theme.colors.background,
+    borderTopLeftRadius: Theme.radius.xl,
+    borderTopRightRadius: Theme.radius.xl,
+    padding: Theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+
+  scroll: {
+    flexGrow: 1,
+    paddingBottom: 32,
   },
 });

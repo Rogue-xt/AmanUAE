@@ -80,19 +80,19 @@ export default function SettingsScreen() {
 
       <SectionTitle title="App Controls" />
 
-      <MenuItem
+      {/* <MenuItem
         icon="bell"
         title="Notifications"
         subtitle="Parking and document reminders"
         disabled
-      />
+      /> */}
 
-      <MenuItem
+      {/* <MenuItem
         icon="cloud-arrow-up"
         title="Cloud Backup"
         subtitle="Firestore sync will be added next"
         disabled
-      />
+      /> */}
 
       <MenuItem
         icon="palette"
@@ -110,13 +110,13 @@ export default function SettingsScreen() {
         disabled
       />
 
-      <MenuItem
+      {/* <MenuItem
         icon="shield-halved"
         title="Privacy & Security"
         subtitle="Account and data protection"
         disabled
-      />
-
+      /> */}
+{/* 
       <SectionTitle title="About" />
 
       <MenuItem
@@ -124,7 +124,7 @@ export default function SettingsScreen() {
         title="About ZoneGard"
         subtitle="Version 1.0.0"
         disabled
-      />
+      /> */}
 
       <Pressable onPress={handleLogout} style={styles.logoutButton}>
         <FontAwesome6 name="right-from-bracket" size={16} color="#B91C1C" />

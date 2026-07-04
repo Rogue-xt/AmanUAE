@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
+  KeyboardAvoidingView,
   Modal,
   Pressable,
   StyleSheet,
@@ -127,72 +128,81 @@ const destination = `${FileSystem.documentDirectory}${Date.now()}-${safeFileName
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
-        <View style={styles.card}>
-          <Text style={styles.title}>
-            {mode === "renew" ? "Renew Document" : "Edit Document"}
-          </Text>
-
-          {mode === "edit" && (
-            <>
-              <Text style={styles.label}>Document Title</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Document Title"
-                placeholderTextColor={Theme.colors.textMuted}
-                value={title}
-                onChangeText={setTitle}
-              />
-            </>
-          )}
-          <Text style={styles.label}>
-            {mode === "renew" ? "New Expiry Date" : "Expiry Date"}
-          </Text>
-          <Pressable
-            style={styles.dateButton}
-            onPress={() => setShowDatePicker(true)}
-          >
-            <View>
-              <Text style={styles.dateMiniLabel}>Selected Date</Text>
-              <Text style={styles.dateValue}>
-                {expiryDate || "Select expiry date"}
-              </Text>
-            </View>
-          </Pressable>
-
-          {showDatePicker && (
-            <DateTimePicker
-              value={selectedDate}
-              mode="date"
-              display={Platform.OS === "ios" ? "spinner" : "default"}
-              onChange={handleDateChange}
-            />
-          )}
-
-          <Pressable style={styles.fileReplaceBtn} onPress={handleReplaceFile}>
-            <Text style={styles.fileReplaceText}>
-              {pickedFile?.fileName
-                ? `Selected: ${pickedFile.fileName}`
-                : mode === "renew"
-                  ? "Attach Renewed File"
-                  : document?.fileName
-                    ? `Current: ${document.fileName} — Tap to replace`
-                    : "Attach / Replace File"}
+      <KeyboardAvoidingView
+        style={styles.overlay}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
+      >
+        <View style={styles.overlay}>
+          <View style={styles.card}>
+            <Text style={styles.title}>
+              {mode === "renew" ? "Renew Document" : "Edit Document"}
             </Text>
-          </Pressable>
-          <View style={styles.actions}>
-            <Pressable style={styles.cancelBtn} onPress={onClose}>
-              <Text style={styles.cancelText}>Cancel</Text>
+
+            {mode === "edit" && (
+              <>
+                <Text style={styles.label}>Document Title</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Document Title"
+                  placeholderTextColor={Theme.colors.textMuted}
+                  value={title}
+                  onChangeText={setTitle}
+                />
+              </>
+            )}
+            <Text style={styles.label}>
+              {mode === "renew" ? "New Expiry Date" : "Expiry Date"}
+            </Text>
+            <Pressable
+              style={styles.dateButton}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <View>
+                <Text style={styles.dateMiniLabel}>Selected Date</Text>
+                <Text style={styles.dateValue}>
+                  {expiryDate || "Select expiry date"}
+                </Text>
+              </View>
             </Pressable>
 
-            <Pressable style={styles.saveBtn} onPress={handleSave}>
-              <Text style={styles.saveText}>
-                {mode === "renew" ? "Renew" : "Save"}
+            {showDatePicker && (
+              <DateTimePicker
+                value={selectedDate}
+                mode="date"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                onChange={handleDateChange}
+              />
+            )}
+
+            <Pressable
+              style={styles.fileReplaceBtn}
+              onPress={handleReplaceFile}
+            >
+              <Text style={styles.fileReplaceText}>
+                {pickedFile?.fileName
+                  ? `Selected: ${pickedFile.fileName}`
+                  : mode === "renew"
+                    ? "Attach Renewed File"
+                    : document?.fileName
+                      ? `Current: ${document.fileName} — Tap to replace`
+                      : "Attach / Replace File"}
               </Text>
             </Pressable>
+            <View style={styles.actions}>
+              <Pressable style={styles.cancelBtn} onPress={onClose}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </Pressable>
+
+              <Pressable style={styles.saveBtn} onPress={handleSave}>
+                <Text style={styles.saveText}>
+                  {mode === "renew" ? "Renew" : "Save"}
+                </Text>
+              </Pressable>
+            </View>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

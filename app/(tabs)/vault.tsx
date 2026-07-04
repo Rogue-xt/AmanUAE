@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Image,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -364,158 +365,163 @@ const handleShareDocument = async (doc: DocumentRecord) => {
             animationType="slide"
             onRequestClose={() => setIsAddDocumentOpen(false)}
           >
-            <View style={styles.addModalOverlay}>
-              <View style={styles.addModalCard}>
-                <View style={styles.formHeader}>
-                  <View style={styles.modalHeaderText}>
-                    <Text style={styles.modalTitle}>Add Document</Text>
-                    <Text style={styles.modalSubtitle}>
-                      Local device storage
-                    </Text>
+            <KeyboardAvoidingView
+              style={styles.overlay}
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+              keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
+            >
+              <View style={styles.card}>
+
+                  <View style={styles.formHeader}>
+                    <View style={styles.modalHeaderText}>
+                      <Text style={styles.modalTitle}>Add Document</Text>
+                      <Text style={styles.modalSubtitle}>
+                        Local device storage
+                      </Text>
+                    </View>
+
+                    <Pressable
+                      style={styles.cancelPill}
+                      onPress={() => setIsAddDocumentOpen(false)}
+                    >
+                      <FontAwesome6
+                        name="xmark"
+                        size={12}
+                        color={Theme.colors.textMuted}
+                      />
+                      <Text style={styles.cancelPillText}>Close</Text>
+                    </Pressable>
                   </View>
 
-                  <Pressable
-                    style={styles.cancelPill}
-                    onPress={() => setIsAddDocumentOpen(false)}
-                  >
-                    <FontAwesome6
-                      name="xmark"
-                      size={12}
-                      color={Theme.colors.textPrimary}
-                    />
-                    <Text style={styles.cancelPillText}>Close</Text>
-                  </Pressable>
-                </View>
+                  <ScrollView showsVerticalScrollIndicator={false}>
+                    <Text style={styles.fieldLabel}>Linked Vehicle</Text>
 
-                <ScrollView showsVerticalScrollIndicator={false}>
-                  <Text style={styles.fieldLabel}>Linked Vehicle</Text>
-
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.vehicleLinkRibbon}
-                  >
-                    <TouchableOpacity
-                      style={[
-                        styles.vehicleLinkChip,
-                        selectedVehicleId === "" &&
-                          styles.vehicleLinkChipActive,
-                      ]}
-                      onPress={() => setSelectedVehicleId("")}
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.vehicleLinkRibbon}
                     >
-                      <Text
-                        style={[
-                          styles.vehicleLinkText,
-                          selectedVehicleId === "" &&
-                            styles.vehicleLinkTextActive,
-                        ]}
-                      >
-                        None
-                      </Text>
-                    </TouchableOpacity>
-
-                    {vehicles.map((vehicle) => (
                       <TouchableOpacity
-                        key={vehicle.id}
                         style={[
                           styles.vehicleLinkChip,
-                          selectedVehicleId === vehicle.id &&
+                          selectedVehicleId === "" &&
                             styles.vehicleLinkChipActive,
                         ]}
-                        onPress={() => setSelectedVehicleId(vehicle.id)}
+                        onPress={() => setSelectedVehicleId("")}
                       >
                         <Text
                           style={[
                             styles.vehicleLinkText,
-                            selectedVehicleId === vehicle.id &&
+                            selectedVehicleId === "" &&
                               styles.vehicleLinkTextActive,
                           ]}
                         >
-                          {vehicle.label}
+                          None
                         </Text>
                       </TouchableOpacity>
-                    ))}
-                  </ScrollView>
 
-                  <SegmentedChips
-                    options={docTypeOptions}
-                    selected={selectedType}
-                    onSelect={setSelectedType}
-                    horizontal
-                  />
+                      {vehicles.map((vehicle) => (
+                        <TouchableOpacity
+                          key={vehicle.id}
+                          style={[
+                            styles.vehicleLinkChip,
+                            selectedVehicleId === vehicle.id &&
+                              styles.vehicleLinkChipActive,
+                          ]}
+                          onPress={() => setSelectedVehicleId(vehicle.id)}
+                        >
+                          <Text
+                            style={[
+                              styles.vehicleLinkText,
+                              selectedVehicleId === vehicle.id &&
+                                styles.vehicleLinkTextActive,
+                            ]}
+                          >
+                            {vehicle.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
 
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Document title"
-                    placeholderTextColor={Theme.colors.textMuted}
-                    value={title}
-                    onChangeText={setTitle}
-                  />
-
-                  <Pressable
-                    style={styles.dateButton}
-                    onPress={() => setShowDatePicker(true)}
-                  >
-                    <View>
-                      <Text style={styles.dateLabel}>Expiry Date</Text>
-                      <Text style={styles.dateValue}>
-                        {expiryDate || "Select expiry date"}
-                      </Text>
-                    </View>
-                    <FontAwesome6
-                      name="calendar"
-                      size={18}
-                      color={Theme.colors.primaryGlow}
+                    <SegmentedChips
+                      options={docTypeOptions}
+                      selected={selectedType}
+                      onSelect={setSelectedType}
+                      horizontal
                     />
-                  </Pressable>
 
-                  {showDatePicker && (
-                    <DateTimePicker
-                      value={selectedDate}
-                      mode="date"
-                      display={Platform.OS === "ios" ? "spinner" : "default"}
-                      onChange={handleDateChange}
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Document title"
+                      placeholderTextColor={Theme.colors.textMuted}
+                      value={title}
+                      onChangeText={setTitle}
                     />
-                  )}
 
-                  <Pressable
-                    style={styles.uploadZone}
-                    onPress={handlePickDocument}
-                  >
-                    <View style={styles.uploadIcon}>
+                    <Pressable
+                      style={styles.dateButton}
+                      onPress={() => setShowDatePicker(true)}
+                    >
+                      <View>
+                        <Text style={styles.dateLabel}>Expiry Date</Text>
+                        <Text style={styles.dateValue}>
+                          {expiryDate || "Select expiry date"}
+                        </Text>
+                      </View>
                       <FontAwesome6
-                        name="cloud-arrow-up"
-                        size={22}
+                        name="calendar"
+                        size={18}
                         color={Theme.colors.primaryGlow}
                       />
-                    </View>
-                    <View style={styles.uploadText}>
-                      <Text style={styles.uploadTitle}>
-                        {pickedFile ? pickedFile.name : "Secure Upload Zone"}
-                      </Text>
-                      <Text style={styles.uploadSub}>
-                        {pickedFile
-                          ? formatFileSize(pickedFile.size)
-                          : "Attach PDF or image — Mulkiya, Emirates ID, visa"}
-                      </Text>
-                    </View>
-                  </Pressable>
+                    </Pressable>
 
-                  <PrimaryButton
-                    label="Secure Document"
-                    onPress={handleAddDocument}
-                    variant="success"
-                    icon={
-                      <FontAwesome6
-                        name="shield"
-                        size={14}
-                        color={Theme.colors.textPrimary}
+                    {showDatePicker && (
+                      <DateTimePicker
+                        value={selectedDate}
+                        mode="date"
+                        display={Platform.OS === "ios" ? "spinner" : "default"}
+                        onChange={handleDateChange}
                       />
-                    }
-                  />
-                </ScrollView>
-              </View>
-            </View>
+                    )}
+
+                    <Pressable
+                      style={styles.uploadZone}
+                      onPress={handlePickDocument}
+                    >
+                      <View style={styles.uploadIcon}>
+                        <FontAwesome6
+                          name="cloud-arrow-up"
+                          size={22}
+                          color={Theme.colors.primaryGlow}
+                        />
+                      </View>
+                      <View style={styles.uploadText}>
+                        <Text style={styles.uploadTitle}>
+                          {pickedFile ? pickedFile.name : "Secure Upload Zone"}
+                        </Text>
+                        <Text style={styles.uploadSub}>
+                          {pickedFile
+                            ? formatFileSize(pickedFile.size)
+                            : "Attach PDF or image — Mulkiya, Emirates ID, visa"}
+                        </Text>
+                      </View>
+                    </Pressable>
+
+                    <PrimaryButton
+                      label="Secure Document"
+                      onPress={handleAddDocument}
+                      variant="success"
+                      icon={
+                        <FontAwesome6
+                          name="shield"
+                          size={14}
+                          color={Theme.colors.textPrimary}
+                        />
+                      }
+                    />
+                  </ScrollView>
+                </View>
+            </KeyboardAvoidingView>
           </Modal>
         )}
 
@@ -1115,4 +1121,25 @@ const styles = StyleSheet.create({
     height: 28,
     backgroundColor: Theme.colors.border,
   },
+  scroll: {
+    flexGrow: 1,
+    // paddingBottom: 32,
+  },
+   overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.72)",
+    justifyContent: "flex-end",
+  },
+
+  card: {
+    maxHeight: "88%",
+    backgroundColor: Theme.colors.background,
+    borderTopLeftRadius: Theme.radius.xl,
+    borderTopRightRadius: Theme.radius.xl,
+    padding: Theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+
+
 });
