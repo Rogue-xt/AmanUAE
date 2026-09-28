@@ -177,7 +177,7 @@ export function DocumentCard({
         </View>
 
         <View style={styles.titleBlock}>
-          <Text style={styles.docTitle} numberOfLines={1}>
+          <Text style={styles.docTitle} numberOfLines={3}>
             {document.title}
           </Text>
 
@@ -328,13 +328,16 @@ const styles = StyleSheet.create({
 
   titleBlock: {
     flex: 1,
+    flexShrink: 1, // Forces the container to shrink to fit remaining space
+    minWidth: 0, // Crucial bug fix for nested flex text containers in React Native
   },
 
   docTitle: {
     color: Theme.colors.textPrimary,
     fontSize: 16,
     fontWeight: "900",
-    letterSpacing: -0.2,
+    letterSpacing: 0,
+    paddingRight: 0, // Keeps the heavy '900' font weight from clipping the last letter
   },
 
   docType: {

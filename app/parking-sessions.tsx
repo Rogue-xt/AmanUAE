@@ -14,7 +14,7 @@ import { Theme } from "@/constants/Theme";
 import { ParkingSession, useApp } from "@/src/context/AppContext";
 
 export default function ParkingSessionsScreen() {
-  const { parkingSessions, clearParkingHistory } = useApp();
+  const { parkingSessions, clearParkingHistory, endParkingSession } = useApp();
 
   const groupedSessions = useMemo(() => {
     return {
@@ -22,7 +22,23 @@ export default function ParkingSessionsScreen() {
       completed: parkingSessions.filter((s) => s.status !== "active"),
     };
   }, [parkingSessions]);
-
+const handleEndSession = (session: ParkingSession) => {
+  Alert.alert(
+    "End parking session",
+    `End parking for ${session.vehicleLabel}?`,
+    [
+      {
+        text: "Cancel",
+        style: "cancel",
+      },
+      {
+        text: "End Parking",
+        style: "destructive",
+        onPress: () => endParkingSession(session.id),
+      },
+    ],
+  );
+};
   const handleClearHistory = () => {
     if (parkingSessions.length === 0) return;
 
@@ -105,7 +121,11 @@ export default function ParkingSessionsScreen() {
             <>
               <SectionTitle title="Active" />
               {groupedSessions.active.map((session) => (
-                <SessionCard key={session.id} session={session} />
+                <SessionCard
+                  key={session.id}
+                  session={session}
+                  onEnd={() => handleEndSession(session)}
+                />
               ))}
             </>
           )}
@@ -124,11 +144,19 @@ export default function ParkingSessionsScreen() {
   );
 }
 
+
+
 function SectionTitle({ title }: { title: string }) {
   return <Text style={styles.sectionTitle}>{title}</Text>;
 }
 
-function SessionCard({ session }: { session: ParkingSession }) {
+function SessionCard({
+  session,
+  onEnd,
+}: {
+  session: ParkingSession;
+  onEnd?: () => void;
+}) {
   const start = formatTime(session.startedAt);
   const end = formatTime(session.endedAt ?? session.expiryTimestamp);
 
@@ -180,6 +208,17 @@ function SessionCard({ session }: { session: ParkingSession }) {
             : getDurationLabel(session.startedAt, session.expiryTimestamp)}
         </Text>
       </View>
+      {session.status === "active" && onEnd && (
+        <Pressable style={styles.endSessionButton} onPress={onEnd}>
+          <FontAwesome6
+            name="circle-stop"
+            size={13}
+            color={Theme.colors.danger}
+          />
+
+          <Text style={styles.endSessionText}>End Parking</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -416,5 +455,25 @@ const styles = StyleSheet.create({
     color: Theme.colors.textSecondary,
     fontSize: 12,
     fontWeight: "800",
+  },
+
+  //End session button
+  endSessionButton: {
+    marginTop: 14,
+    minHeight: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Theme.colors.danger,
+    backgroundColor: Theme.colors.dangerMuted,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+
+  endSessionText: {
+    color: Theme.colors.danger,
+    fontSize: 12,
+    fontWeight: "900",
   },
 });

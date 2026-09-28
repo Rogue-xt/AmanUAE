@@ -1,9 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import { useRouter } from "expo-router";
 
-import { useApp } from "../../src/context/AppContext";
+import { useApp, ParkingSession } from "../../src/context/AppContext";
 import { Theme } from "@/constants/Theme";
 import { FadeInView } from "@/components/ui/FadeInView";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
@@ -21,45 +28,51 @@ export default function DashboardScreen() {
   const {
     vehicles,
     documents,
-    activeTicket,
-    clearParkingSession,
+    endParkingSession,
     parkingSessions,
   } = useApp();
 
   const router = useRouter();
   const [now, setNow] = useState(Date.now());
+  const { width: screenWidth } = useWindowDimensions();
+
+  const [activeParkingIndex, setActiveParkingIndex] = useState(0);
+
+  const parkingCardWidth = screenWidth - Theme.spacing.xl * 2;
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+
   useEffect(() => {
-    if (activeTicket && activeTicket.expiryTimestamp <= now) {
-      clearParkingSession();
+    const expiredActiveSessions = parkingSessions.filter(
+      (session) =>
+        session.status === "active" && session.expiryTimestamp <= now,
+    );
+
+    expiredActiveSessions.forEach((session) => {
+      endParkingSession(session.id);
+    });
+  }, [parkingSessions, now, endParkingSession]);
+
+  const activeParkingSessions = useMemo(() => {
+    return parkingSessions.filter(
+      (session) => session.status === "active" && session.expiryTimestamp > now,
+    );
+  }, [parkingSessions, now]);
+
+  useEffect(() => {
+    if (activeParkingSessions.length === 0) {
+      setActiveParkingIndex(0);
+      return;
     }
-  }, [activeTicket, now, clearParkingSession]);
 
-  const ticketInfo = useMemo(() => {
-    if (!activeTicket) return null;
-
-    const remainingMs = activeTicket.expiryTimestamp - now;
-    const totalSeconds = Math.max(0, Math.floor(remainingMs / 1000));
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-
-    return {
-      expired: remainingMs <= 0,
-      hours,
-      minutes,
-      seconds,
-      expiresAt: new Date(activeTicket.expiryTimestamp).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    };
-  }, [activeTicket, now]);
+    if (activeParkingIndex >= activeParkingSessions.length) {
+      setActiveParkingIndex(activeParkingSessions.length - 1);
+    }
+  }, [activeParkingSessions.length, activeParkingIndex]);
 
   const urgentDocuments = useMemo(() => {
     return [...documents]
@@ -83,27 +96,11 @@ export default function DashboardScreen() {
       .length;
   }, [documents]);
 
-  const complianceScore = useMemo(
-    () =>
-      computeComplianceScore(
-        documents,
-        !!activeTicket && !!ticketInfo && !ticketInfo.expired,
-      ),
-    [documents, activeTicket, ticketInfo],
-  );
+const complianceScore = useMemo(
+  () => computeComplianceScore(documents, activeParkingSessions.length > 0),
+  [documents, activeParkingSessions.length],
+);
 
-  const complianceColor =
-    complianceScore >= 80
-      ? Theme.colors.success
-      : complianceScore >= 50
-        ? Theme.colors.warning
-        : Theme.colors.danger;
-
-  const timerText = ticketInfo
-    ? ticketInfo.hours > 0
-      ? `${String(ticketInfo.hours).padStart(2, "0")}:${String(ticketInfo.minutes).padStart(2, "0")}:${String(ticketInfo.seconds).padStart(2, "0")}`
-      : `${String(ticketInfo.minutes).padStart(2, "0")}:${String(ticketInfo.seconds).padStart(2, "0")}`
-    : "--:--";
 
   const lastSession = parkingSessions[0];
 
@@ -173,65 +170,69 @@ export default function DashboardScreen() {
         </FadeInView>
 
         <FadeInView delay={140}>
-          {activeTicket && ticketInfo ? (
-            <View
-              style={[
-                styles.parkingHero,
-                ticketInfo.expired && styles.parkingHeroExpired,
-              ]}
-            >
-              <View style={styles.parkingTopRow}>
-                <View style={styles.parkingIconBox}>
-                  <FontAwesome6
-                    name="square-parking"
-                    size={23}
-                    color={
-                      ticketInfo.expired
-                        ? Theme.colors.danger
-                        : Theme.colors.primaryGlow
-                    }
-                  />
+          {activeParkingSessions.length > 0 ? (
+            <View style={styles.parkingCarouselSection}>
+              <View style={styles.parkingCarouselHeader}>
+                <View>
+                  <Text style={styles.parkingCarouselTitle}>
+                    Active Parking
+                  </Text>
+                  <Text style={styles.parkingCarouselSubtitle}>
+                    {activeParkingSessions.length} active session
+                    {activeParkingSessions.length === 1 ? "" : "s"}
+                  </Text>
                 </View>
 
-                <View style={styles.parkingTitleBlock}>
-                  <Text
-                    style={[
-                      styles.parkingKicker,
-                      ticketInfo.expired && { color: Theme.colors.danger },
-                    ]}
+                <Text style={styles.parkingCarouselCount}>
+                  {activeParkingIndex + 1}/{activeParkingSessions.length}
+                </Text>
+              </View>
+
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                decelerationRate="fast"
+                snapToInterval={parkingCardWidth}
+                snapToAlignment="start"
+                onMomentumScrollEnd={(event) => {
+                  const nextIndex = Math.round(
+                    event.nativeEvent.contentOffset.x / parkingCardWidth,
+                  );
+
+                  setActiveParkingIndex(nextIndex);
+                }}
+              >
+                {activeParkingSessions.map((session) => (
+                  <View
+                    key={session.id}
+                    style={{
+                      width: parkingCardWidth,
+                    }}
                   >
-                    {ticketInfo.expired ? "Parking expired" : "Active parking"}
-                  </Text>
-                  <Text style={styles.parkingVehicle}>
-                    {activeTicket.vehicleLabel}
-                  </Text>
-                  <Text style={styles.parkingMeta}>
-                    {activeTicket.parkingEmirate} • {activeTicket.plateDetails}
-                  </Text>
+                    <ActiveParkingCard
+                      session={session}
+                      now={now}
+                      onEnd={() => endParkingSession(session.id)}
+                    />
+                  </View>
+                ))}
+              </ScrollView>
+
+              {activeParkingSessions.length > 1 && (
+                <View style={styles.paginationDots}>
+                  {activeParkingSessions.map((session, index) => (
+                    <View
+                      key={session.id}
+                      style={[
+                        styles.paginationDot,
+                        index === activeParkingIndex &&
+                          styles.paginationDotActive,
+                      ]}
+                    />
+                  ))}
                 </View>
-              </View>
-
-              <View style={styles.timerBox}>
-                <Text style={styles.timerLabel}>Time remaining</Text>
-                <Text
-                  style={[
-                    styles.timerText,
-                    ticketInfo.expired && { color: Theme.colors.danger },
-                  ]}
-                >
-                  {ticketInfo.expired ? "00:00" : timerText}
-                </Text>
-                <Text style={styles.timerSub}>
-                  Expires at {ticketInfo.expiresAt}
-                </Text>
-              </View>
-
-              <PrimaryButton
-                label={ticketInfo.expired ? "Clear Session" : "End Session"}
-                onPress={clearParkingSession}
-                variant="ghost"
-                style={styles.endButton}
-              />
+              )}
             </View>
           ) : (
             <View style={styles.emptyParkingHero}>
@@ -243,10 +244,12 @@ export default function DashboardScreen() {
                     color={Theme.colors.primaryGlow}
                   />
                 </View>
+
                 <View style={{ flex: 1 }}>
                   <Text style={styles.emptyParkingTitle}>
                     No active parking
                   </Text>
+
                   <Text style={styles.emptyParkingSub}>
                     Generate a ticket and ZoneGard will track the countdown.
                   </Text>
@@ -387,7 +390,88 @@ export default function DashboardScreen() {
     </ScreenContainer>
   );
 }
+function ActiveParkingCard({
+  session,
+  now,
+  onEnd,
+}: {
+  session: ParkingSession;
+  now: number;
+  onEnd: () => void;
+}) {
+  const remainingMs = Math.max(session.expiryTimestamp - now, 0);
+  const totalSeconds = Math.floor(remainingMs / 1000);
 
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const timerText =
+    hours > 0
+      ? `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
+          2,
+          "0",
+        )}:${String(seconds).padStart(2, "0")}`
+      : `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(
+          2,
+          "0",
+        )}`;
+
+  const expiresAt = new Date(session.expiryTimestamp).toLocaleTimeString(
+    "en-AE",
+    {
+      hour: "2-digit",
+      minute: "2-digit",
+    },
+  );
+
+  return (
+    <View style={styles.parkingHero}>
+      <View style={styles.parkingTopRow}>
+        <View style={styles.parkingIconBox}>
+          <FontAwesome6
+            name="square-parking"
+            size={23}
+            color={Theme.colors.primaryGlow}
+          />
+        </View>
+
+        <View style={styles.parkingTitleBlock}>
+          <Text style={styles.parkingKicker}>Active parking</Text>
+
+          <Text style={styles.parkingVehicle} numberOfLines={1}>
+            {session.vehicleLabel}
+          </Text>
+
+          <Text style={styles.parkingMeta} numberOfLines={1}>
+            {session.parkingEmirate} • {session.plateDetails}
+          </Text>
+        </View>
+
+        {session.zoneCode ? (
+          <View style={styles.parkingZonePill}>
+            <Text style={styles.parkingZoneText}>{session.zoneCode}</Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={styles.timerBox}>
+        <Text style={styles.timerLabel}>Time remaining</Text>
+
+        <Text style={styles.timerText}>{timerText}</Text>
+
+        <Text style={styles.timerSub}>Expires at {expiresAt}</Text>
+      </View>
+
+      <PrimaryButton
+        label="End Parking"
+        onPress={onEnd}
+        variant="ghost"
+        style={styles.endButton}
+      />
+    </View>
+  );
+}
 function MetricCard({
   icon,
   label,
@@ -446,7 +530,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: Theme.spacing.md,
-    marginBottom:20
+    marginBottom: 20,
   },
   logoBox: {
     width: 54,
@@ -838,6 +922,78 @@ const styles = StyleSheet.create({
   logoImage: {
     width: "100%",
     height: "100%",
-    borderRadius:10
+    borderRadius: 10,
+  },
+
+  //Carousel
+  parkingCarouselSection: {
+    marginBottom: Theme.spacing.md,
+  },
+
+  parkingCarouselHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Theme.spacing.sm,
+  },
+
+  parkingCarouselTitle: {
+    color: Theme.colors.textPrimary,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+
+  parkingCarouselSubtitle: {
+    color: Theme.colors.textMuted,
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+
+  parkingCarouselCount: {
+    color: Theme.colors.textSecondary,
+    fontSize: 12,
+    fontWeight: "900",
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.full,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+
+  paginationDots: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 10,
+  },
+
+  paginationDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: Theme.colors.border,
+  },
+
+  paginationDotActive: {
+    width: 18,
+    backgroundColor: Theme.colors.primary,
+  },
+
+  parkingZonePill: {
+    backgroundColor: Theme.colors.primaryMuted,
+    borderRadius: Theme.radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: Theme.colors.primary,
+  },
+
+  parkingZoneText: {
+    color: Theme.colors.primaryGlow,
+    fontSize: 11,
+    fontWeight: "900",
   },
 });

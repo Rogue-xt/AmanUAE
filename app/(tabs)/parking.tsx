@@ -52,6 +52,7 @@ const ZONE_REQUIRED_EMIRATES = [
 const PARKING_RULES = {
   Dubai: {
     supportsSms: true,
+    supportsTime: true,
     requiresZone: true,
     requiresDuration: true,
     requiresBayType: false,
@@ -59,6 +60,7 @@ const PARKING_RULES = {
   },
   Sharjah: {
     supportsSms: true,
+    supportsTime: true,
     requiresZone: false,
     requiresDuration: true,
     requiresBayType: false,
@@ -66,20 +68,23 @@ const PARKING_RULES = {
   },
   Ajman: {
     supportsSms: true,
+    supportsTime: false,
     requiresZone: false,
     requiresDuration: false,
     requiresBayType: false,
     shortcode: "5155",
   },
   RasAlKhaimah: {
-    supportsSms: true,
+    supportsSms: false,
+    supportsTime: false,
     requiresZone: false,
-    requiresDuration: true,
+    requiresDuration: false,
     requiresBayType: false,
-    shortcode: "RAK_CODE_HERE",
+    shortcode: null,
   },
   AbuDhabi: {
     supportsSms: true,
+    supportsTime: true,
     requiresZone: false,
     requiresDuration: true,
     requiresBayType: true,
@@ -87,6 +92,7 @@ const PARKING_RULES = {
   },
   UmmAlQuwain: {
     supportsSms: false,
+    supportsTime: false,
     requiresZone: false,
     requiresDuration: false,
     requiresBayType: false,
@@ -94,6 +100,7 @@ const PARKING_RULES = {
   },
   Fujairah: {
     supportsSms: false,
+    supportsTime: false,
     requiresZone: false,
     requiresDuration: false,
     requiresBayType: false,
@@ -104,7 +111,7 @@ const requiresZoneCode = (emirate?: string) => {
   return !!emirate && ZONE_REQUIRED_EMIRATES.includes(emirate);
 };
 export default function ParkingScreen() {
-const { vehicles, activeTicket, startParkingSession, parkingSessions } =
+const { vehicles, startParkingSession, parkingSessions,endParkingSession } =
   useApp();
 
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
@@ -119,6 +126,14 @@ const { vehicles, activeTicket, startParkingSession, parkingSessions } =
   const [detectedEmirate, setDetectedEmirate] = useState<string | null>(null);
 
   const activeVehicle = vehicles.find((v) => v.id === selectedVehicleId);
+  const activeParkingSessions = useMemo(
+    () =>
+      parkingSessions.filter(
+        (session) =>
+          session.status === "active" && session.expiryTimestamp > Date.now(),
+      ),
+    [parkingSessions],
+  );
 
   const currentParkingLocation = selectedParkingEmirate;
   const parkingRule = PARKING_RULES[currentParkingLocation];
@@ -127,6 +142,7 @@ const { vehicles, activeTicket, startParkingSession, parkingSessions } =
   const needsDurationInput = parkingRule.requiresDuration;
   const needsBayTypeInput = parkingRule.requiresBayType;
   const smsSupported = parkingRule.supportsSms;
+  const timeSupported = parkingRule.supportsTime;
 
 const smsPreview = useMemo(() => {
   if (!activeVehicle) return null;
@@ -217,6 +233,29 @@ const smsPreview = useMemo(() => {
         "Selection Missing",
         "Please select a secured vehicle plate from the horizontal layout slider.",
       );
+      return;
+    }
+    const existingVehicleSession = activeParkingSessions.find(
+      (session) => session.vehicleId === activeVehicle.id,
+    );
+
+    if (existingVehicleSession) {
+      Alert.alert(
+        "Parking already active",
+        `An active parking session is already running for ${activeVehicle.label}. Please end the current session before starting a new one to prevent double-booking.`,
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+          },
+          {
+            text: "End Parking",
+            style: "destructive",
+            onPress: () => endParkingSession(existingVehicleSession.id),
+          },
+        ],
+      );
+
       return;
     }
 
@@ -350,9 +389,11 @@ const smsPreview = useMemo(() => {
               <View style={{ flex: 1 }}>
                 <Text style={styles.sessionsTitle}>Parking Sessions</Text>
                 <Text style={styles.sessionsSub}>
-                  {parkingSessions.length > 0
-                    ? `${parkingSessions.length} saved sessions`
-                    : "Review previous parking activity"}
+                  {activeParkingSessions.length > 0
+                    ? `${activeParkingSessions.length} active • ${parkingSessions.length} total`
+                    : parkingSessions.length > 0
+                      ? `${parkingSessions.length} saved sessions`
+                      : "Review previous parking activity"}
                 </Text>
               </View>
 
@@ -446,40 +487,42 @@ const smsPreview = useMemo(() => {
         {activeVehicle && (
           <>
             <FadeInView delay={240}>
-              <View style={styles.zoneCard}>
-                <SectionHeader
-                  title="Parking Zone"
-                  subtitle={
-                    needsZoneInput
-                      ? "Required for this emirate"
-                      : "Zone not required"
-                  }
-                />
-                {needsZoneInput ? (
-                  <TextInput
-                    style={styles.zoneInput}
-                    placeholder="Zone code (e.g. 332C or 101)"
-                    placeholderTextColor={Theme.colors.textMuted}
-                    value={zoneCode}
-                    onChangeText={setZoneCode}
-                    autoCapitalize="characters"
+              {needsZoneInput && (
+                <View style={styles.zoneCard}>
+                  <SectionHeader
+                    title="Parking Zone"
+                    subtitle={
+                      needsZoneInput
+                        ? "Required for this emirate"
+                        : "Zone not required"
+                    }
                   />
-                ) : (
-                  <View style={styles.infoBox}>
-                    <FontAwesome6
-                      name="circle-info"
-                      size={14}
-                      color={Theme.colors.primaryGlow}
+                  {needsZoneInput ? (
+                    <TextInput
+                      style={styles.zoneInput}
+                      placeholder="Zone code (e.g. 332C or 101)"
+                      placeholderTextColor={Theme.colors.textMuted}
+                      value={zoneCode}
+                      onChangeText={setZoneCode}
+                      autoCapitalize="characters"
                     />
-                    <Text style={styles.infoText}>
-                      {currentParkingLocation
-                        ? formatEmirate(currentParkingLocation)
-                        : "This emirate"}{" "}
-                      uses flat-rate messaging.
-                    </Text>
-                  </View>
-                )}
-              </View>
+                  ) : (
+                    <View style={styles.infoBox}>
+                      <FontAwesome6
+                        name="circle-info"
+                        size={14}
+                        color={Theme.colors.primaryGlow}
+                      />
+                      <Text style={styles.infoText}>
+                        {currentParkingLocation
+                          ? formatEmirate(currentParkingLocation)
+                          : "This emirate"}{" "}
+                        uses flat-rate messaging.
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
             </FadeInView>
 
             {needsBayTypeInput && (
@@ -520,41 +563,43 @@ const smsPreview = useMemo(() => {
             )}
 
             <FadeInView delay={360}>
-              <View style={styles.durationCard}>
-                <SectionHeader
-                  title="Duration"
-                  subtitle="Ticket length in hours"
-                />
-                <View style={styles.durationRow}>
-                  {DURATION_OPTIONS.map((opt) => (
-                    // <PrimaryButton
-                    //   key={opt.value}
-                    //   label={opt.label}
-                    //   onPress={() => setDuration(opt.value)}
-                    //   variant={duration === opt.value ? "primary" : "ghost"}
-                    //   style={styles.durationBtn}
-                    // />
-                    <Pressable
-                      key={opt.value}
-                      onPress={() => setDuration(opt.value)}
-                      style={[
-                        styles.durationBtn,
-                        duration === opt.value && styles.durationBtnActive,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.durationBtnText,
-                          duration === opt.value &&
-                            styles.durationBtnTextActive,
-                        ]}
-                      >
-                        {opt.label}
-                      </Text>
-                    </Pressable>
-                  ))}
+              {smsSupported && (
+                <View style={styles.durationCard}>
+                  <SectionHeader
+                    title="Duration"
+                    subtitle="Ticket length in hours"
+                  />
+                  {timeSupported ? (
+                    <View style={styles.durationRow}>
+                      {DURATION_OPTIONS.map((opt) => (
+                        <Pressable
+                          key={opt.value}
+                          onPress={() => setDuration(opt.value)}
+                          style={[
+                            styles.durationBtn,
+                            duration === opt.value && styles.durationBtnActive,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.durationBtnText,
+                              duration === opt.value &&
+                                styles.durationBtnTextActive,
+                            ]}
+                          >
+                            {opt.label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={styles.sectionSubtitleWarning}>
+                      Ajman SMS parking is restricted to 1-hour bookings.
+                      Extensions can be made via renewal SMS.
+                    </Text>
+                  )}
                 </View>
-              </View>
+              )}
             </FadeInView>
 
             {smsPreview && (
@@ -600,9 +645,11 @@ const smsPreview = useMemo(() => {
                   />
                 }
               />
-              {activeTicket && (
+              {activeParkingSessions.length > 0 && (
                 <Text style={styles.activeNote}>
-                  Active session running — sending will start a new timer.
+                  {activeParkingSessions.length} active parking session
+                  {activeParkingSessions.length === 1 ? "" : "s"} running.
+                  Sending this SMS will create another independent timer.
                 </Text>
               )}
             </FadeInView>
@@ -835,7 +882,13 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: Theme.spacing.md,
   },
-
+ sectionSubtitleWarning: {
+    color: "orange",
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 18,
+    marginBottom: Theme.spacing.md,
+  },
   emirateChip: {
     backgroundColor: Theme.colors.surface,
     borderWidth: 1,

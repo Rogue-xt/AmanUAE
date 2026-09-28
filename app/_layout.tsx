@@ -71,6 +71,7 @@ function RootLayoutNav() {
       {!user && <Redirect href="/auth" />}
 
       <Stack>
+        <Stack.Screen name="index" />
         <Stack.Screen name="auth" options={{ headerShown: false }} />
         <Stack.Screen name="signup" options={{ headerShown: false }} />
         <Stack.Screen name="forgot-password" options={{ headerShown: false }} />

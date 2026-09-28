@@ -67,7 +67,7 @@ export function generateParkingSMS(payload: ParkingPayload): {
 
       return {
         recipient: "7275",
-        body: `${prefix} ${cleanPlateCode} ${cleanPlateNumber} ${cleanZone} ${hours}`,
+        body: `${prefix}${cleanPlateCode} ${cleanPlateNumber} ${cleanZone} ${hours}`,
       };
     }
 
@@ -87,26 +87,26 @@ export function generateParkingSMS(payload: ParkingPayload): {
 
       return {
         recipient: "5566",
-        body: `${prefix} ${cleanPlateCode} ${cleanPlateNumber} ${hours}`,
+        body: `${prefix} ${cleanPlateNumber} ${hours}`,
       };
     }
 
     case "Ajman": {
       return {
         recipient: "5155",
-        body: `${prefix} ${cleanPlateCode} ${cleanPlateNumber} ${durationInHours}`,
+        body: `${prefix} ${cleanPlateCode} ${cleanPlateNumber} `,
       };
     }
 
-    case "RasAlKhaimah": {
-      const hours = Math.max(1, Math.min(24, durationInHours));
+    // case "RasAlKhaimah": {
+    //   const hours = Math.max(1, Math.min(24, durationInHours));
 
-      return {
-        recipient: "RAK_CODE_HERE",
-        body: `${prefix} ${cleanPlateCode} ${cleanPlateNumber} ${hours}`,
-      };
-    }
-
+    //   return {
+    //     recipient: "RAK_CODE_HERE",
+    //     body: `${prefix} ${cleanPlateCode} ${cleanPlateNumber} ${hours}`,
+    //   };
+    // }
+    case "RasAlKhaimah":
     case "UmmAlQuwain":
     case "Fujairah": {
       throw new Error(`${parkingEmirate} does not support SMS parking.`);

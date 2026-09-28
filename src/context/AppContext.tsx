@@ -119,7 +119,11 @@ interface AppContextType {
   addDocument: (doc: Omit<DocumentRecord, "id" | "createdAt">) => Promise<void>;
   deleteDocument: (id: string) => Promise<void>;
   startParkingSession: (ticket: StartParkingSessionInput) => Promise<void>;
+
+  endParkingSession: (sessionId: string) => Promise<void>;
+
   clearParkingSession: () => Promise<void>;
+
   parkingSessions: ParkingSession[];
   clearParkingHistory: () => Promise<void>;
   resetAppState: () => void;
@@ -140,18 +144,6 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
-
-// Define storage keys for internal device memory isolation
-// const requestNotificationPermission = async () => {
-//   const existing = await Notifications.getPermissionsAsync();
-
-//   if (existing.status === "granted") {
-//     return true;
-//   }
-
-//   const requested = await Notifications.requestPermissionsAsync();
-//   return requested.status === "granted";
-// };
 
 const getStorageKeys = (uid: string) => ({
   vehicles: `@zonegard_${uid}_vehicles`,
@@ -286,11 +278,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const startParkingSession = async (newTicket: StartParkingSessionInput) => {
     try {
       const startedAt = newTicket.startedAt ?? Date.now();
-
-      // const completeTicket: ActiveTicket = {
-      //   ...newTicket,
-      //   id: Date.now().toString(),
-      // };
       const completeTicket: ActiveTicket = {
         id: Date.now().toString(),
 
@@ -349,46 +336,155 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  const clearParkingSession = async () => {
-    await cancelNotification(
-      activeTicket?.expiryReminderNotificationId ?? undefined,
-    );
-    await cancelNotification(activeTicket?.expiredNotificationId ?? undefined);
-    try {
-      if (activeTicket) {
+  //End parking
+    const endParkingSession = async (sessionId: string) => {
+      try {
+        const selectedSession = parkingSessions.find(
+          (session) => session.id === sessionId,
+        );
+
+        if (!selectedSession) {
+          console.warn("Parking session not found:", sessionId);
+          return;
+        }
+
+        if (selectedSession.status !== "active") {
+          return;
+        }
+
+        await Promise.all([
+          cancelNotification(
+            selectedSession.expiryReminderNotificationId ?? undefined,
+          ),
+          cancelNotification(
+            selectedSession.expiredNotificationId ?? undefined,
+          ),
+        ]);
+
         const now = Date.now();
 
-        const updatedSessions = parkingSessions.map((session) =>
-          session.id === activeTicket.id
-            ? {
-                ...session,
-                status:
-                  session.expiryTimestamp <= now
-                    ? ("expired" as const)
-                    : ("completed" as const),
-                endedAt: now,
-              }
-            : session,
+        const updatedSessions: ParkingSession[] = parkingSessions.map(
+          (session) =>
+            session.id === sessionId
+              ? {
+                  ...session,
+                  status:
+                    session.expiryTimestamp <= now
+                      ? ("expired" as const)
+                      : ("completed" as const),
+                  endedAt: now,
+                  expiryReminderNotificationId: null,
+                  expiredNotificationId: null,
+                }
+              : session,
         );
 
         setParkingSessions(updatedSessions);
+
+        /*
+         * Keep activeTicket temporarily for backward compatibility.
+         * If the ended session was the current activeTicket, select another
+         * active session so the existing dashboard does not become empty.
+         */
+        let nextActiveTicket = activeTicket;
+
+        if (activeTicket?.id === sessionId) {
+          const nextActiveSession = updatedSessions.find(
+            (session) =>
+              session.status === "active" &&
+              session.expiryTimestamp > Date.now(),
+          );
+
+          nextActiveTicket = nextActiveSession
+            ? {
+                id: nextActiveSession.id,
+                vehicleLabel: nextActiveSession.vehicleLabel,
+                plateDetails: nextActiveSession.plateDetails,
+                parkingEmirate: nextActiveSession.parkingEmirate,
+                expiryTimestamp: nextActiveSession.expiryTimestamp,
+                expiryReminderNotificationId:
+                  nextActiveSession.expiryReminderNotificationId,
+                expiredNotificationId: nextActiveSession.expiredNotificationId,
+              }
+            : null;
+
+          setActiveTicket(nextActiveTicket);
+        }
+
         if (!user?.uid) return;
+
         const keys = getStorageKeys(user.uid);
-        await AsyncStorage.setItem(
-          keys.parkingSessions,
-          JSON.stringify(updatedSessions),
-        );
+
+        const storageUpdates: [string, string][] = [
+          [keys.parkingSessions, JSON.stringify(updatedSessions)],
+        ];
+
+        if (nextActiveTicket) {
+          storageUpdates.push([
+            keys.activeTicket,
+            JSON.stringify(nextActiveTicket),
+          ]);
+
+          await AsyncStorage.multiSet(storageUpdates);
+        } else {
+          await AsyncStorage.setItem(
+            keys.parkingSessions,
+            JSON.stringify(updatedSessions),
+          );
+
+          await AsyncStorage.removeItem(keys.activeTicket);
+        }
+      } catch (error) {
+        console.error("Failed to end selected parking session:", error);
       }
+    };
 
-      setActiveTicket(null);
-      if (!user?.uid) return;
-      const keys = getStorageKeys(user.uid);
-      await AsyncStorage.removeItem(keys.activeTicket);
-    } catch (error) {
-      console.error("Failed to flush active tracking matrix session:", error);
-    }
-  };
+    //Clear Parking
+  // const clearParkingSession = async () => {
+  //   await cancelNotification(
+  //     activeTicket?.expiryReminderNotificationId ?? undefined,
+  //   );
+  //   await cancelNotification(activeTicket?.expiredNotificationId ?? undefined);
+  //   try {
+  //     if (activeTicket) {
+  //       const now = Date.now();
 
+  //       const updatedSessions = parkingSessions.map((session) =>
+  //         session.id === activeTicket.id
+  //           ? {
+  //               ...session,
+  //               status:
+  //                 session.expiryTimestamp <= now
+  //                   ? ("expired" as const)
+  //                   : ("completed" as const),
+  //               endedAt: now,
+  //             }
+  //           : session,
+  //       );
+
+  //       setParkingSessions(updatedSessions);
+  //       if (!user?.uid) return;
+  //       const keys = getStorageKeys(user.uid);
+  //       await AsyncStorage.setItem(
+  //         keys.parkingSessions,
+  //         JSON.stringify(updatedSessions),
+  //       );
+  //     }
+
+  //     setActiveTicket(null);
+  //     if (!user?.uid) return;
+  //     const keys = getStorageKeys(user.uid);
+  //     await AsyncStorage.removeItem(keys.activeTicket);
+  //   } catch (error) {
+  //     console.error("Failed to flush active tracking matrix session:", error);
+  //   }
+  // };
+
+    const clearParkingSession = async () => {
+      if (!activeTicket?.id) return;
+
+      await endParkingSession(activeTicket.id);
+    };
   const deleteVehicle = async (id: string) => {
     try {
       const updatedVehicles = vehicles.filter((v) => v.id !== id);
@@ -682,6 +778,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         deleteDocument,
         activeTicket,
         startParkingSession,
+        endParkingSession,
         clearParkingSession,
         updateVehicle,
         updateDocument,
