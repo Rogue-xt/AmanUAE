@@ -1,8 +1,11 @@
 import * as Linking from "expo-linking";
 import * as Location from "expo-location";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  AppState,
+  AppStateStatus,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -31,6 +34,12 @@ const DURATION_OPTIONS = [
   { value: 2, label: "2h" },
   { value: 3, label: "3h" },
   { value: 4, label: "4h" },
+];
+const SHARJAH_DURATION_OPTIONS = [
+  { value: 1, label: "1h" },
+  { value: 2, label: "2h" },
+  { value: 3, label: "3h" },
+  { value: 5, label: "5h" },
 ];
 const PARKING_EMIRATES = [
   "Dubai",
@@ -110,6 +119,16 @@ const PARKING_RULES = {
 const requiresZoneCode = (emirate?: string) => {
   return !!emirate && ZONE_REQUIRED_EMIRATES.includes(emirate);
 };
+
+type PendingParkingRequest = {
+  vehicleId: string;
+  vehicleLabel: string;
+  plateDetails: string;
+  parkingEmirate: (typeof PARKING_EMIRATES)[number];
+  zoneCode: string;
+  durationHours: number;
+};
+
 export default function ParkingScreen() {
 const { vehicles, startParkingSession, parkingSessions,endParkingSession } =
   useApp();
@@ -124,6 +143,17 @@ const { vehicles, startParkingSession, parkingSessions,endParkingSession } =
 
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [detectedEmirate, setDetectedEmirate] = useState<string | null>(null);
+  const [pendingParkingRequest, setPendingParkingRequest] =
+    useState<PendingParkingRequest | null>(null);
+  const [confirmationStep, setConfirmationStep] = useState<
+    "sent" | "authority"
+  >("sent");
+  const [isConfirmationVisible, setIsConfirmationVisible] = useState(false);
+  const [isStartingSession, setIsStartingSession] = useState(false);
+  const pendingParkingRequestRef = useRef<PendingParkingRequest | null>(null);
+  const currentAppState = useRef<AppStateStatus>(AppState.currentState);
+  const didLeaveForSms = useRef(false);
+  const didShowReturnPrompt = useRef(false);
 
   const activeVehicle = vehicles.find((v) => v.id === selectedVehicleId);
   const activeParkingSessions = useMemo(
@@ -143,6 +173,47 @@ const { vehicles, startParkingSession, parkingSessions,endParkingSession } =
   const needsBayTypeInput = parkingRule.requiresBayType;
   const smsSupported = parkingRule.supportsSms;
   const timeSupported = parkingRule.supportsTime;
+  const durationOptions =
+    currentParkingLocation === "Sharjah"
+      ? SHARJAH_DURATION_OPTIONS
+      : DURATION_OPTIONS;
+
+  useEffect(() => {
+    if (!durationOptions.some((option) => option.value === duration)) {
+      setDuration(1);
+    }
+  }, [duration, durationOptions]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      const wasAway =
+        currentAppState.current === "inactive" ||
+        currentAppState.current === "background";
+
+      if (
+        pendingParkingRequestRef.current &&
+        (nextState === "inactive" || nextState === "background")
+      ) {
+        didLeaveForSms.current = true;
+      }
+
+      if (
+        pendingParkingRequestRef.current &&
+        nextState === "active" &&
+        wasAway &&
+        didLeaveForSms.current &&
+        !didShowReturnPrompt.current
+      ) {
+        didShowReturnPrompt.current = true;
+        setConfirmationStep("sent");
+        setIsConfirmationVisible(true);
+      }
+
+      currentAppState.current = nextState;
+    });
+
+    return () => subscription.remove();
+  }, []);
 
 const smsPreview = useMemo(() => {
   if (!activeVehicle) return null;
@@ -228,6 +299,14 @@ const smsPreview = useMemo(() => {
   };
 
   const handleTriggerSMS = async () => {
+    if (pendingParkingRequest) {
+      Alert.alert(
+        "Parking confirmation pending",
+        "Finish or cancel the current SMS confirmation before opening another parking SMS.",
+      );
+      return;
+    }
+
     if (!selectedVehicleId || !activeVehicle) {
       Alert.alert(
         "Selection Missing",
@@ -293,24 +372,28 @@ const smsPreview = useMemo(() => {
     const canOpen = await Linking.canOpenURL(smsUrl);
 
     if (canOpen) {
-      await Linking.openURL(smsUrl);
-
-      const durationInMilliseconds = parkingRule.requiresDuration
-        ? duration * 60 * 60 * 1000
-        : 60 * 60 * 1000;
-
-      const expiryTime = Date.now() + durationInMilliseconds;
-
-      await startParkingSession({
+      const pendingRequest: PendingParkingRequest = {
         vehicleId: activeVehicle.id,
         vehicleLabel: activeVehicle.label,
         plateDetails: `${activeVehicle.plateCode} ${activeVehicle.plateNumber}`,
         parkingEmirate: parkingLocation,
         zoneCode: zoneCode.trim(),
         durationHours: parkingRule.requiresDuration ? duration : 1,
-        startedAt: Date.now(),
-        expiryTimestamp: expiryTime,
-      });
+      };
+
+      didLeaveForSms.current = false;
+      didShowReturnPrompt.current = false;
+      setConfirmationStep("sent");
+      pendingParkingRequestRef.current = pendingRequest;
+      setPendingParkingRequest(pendingRequest);
+
+      try {
+        await Linking.openURL(smsUrl);
+      } catch (error) {
+        pendingParkingRequestRef.current = null;
+        setPendingParkingRequest(null);
+        throw error;
+      }
     } else {
       Alert.alert(
         "Device Direct Error",
@@ -324,6 +407,53 @@ const smsPreview = useMemo(() => {
       "An error occurred while compiling your ticket configuration profile.",
     );
   }
+  };
+
+  const discardPendingRequest = () => {
+    setIsConfirmationVisible(false);
+    pendingParkingRequestRef.current = null;
+    setPendingParkingRequest(null);
+    setConfirmationStep("sent");
+    didLeaveForSms.current = false;
+    didShowReturnPrompt.current = false;
+  };
+
+  const confirmParking = async () => {
+    if (!pendingParkingRequest || isStartingSession) return;
+
+    const duplicateSession = parkingSessions.find(
+      (session) =>
+        session.status === "active" &&
+        session.expiryTimestamp > Date.now() &&
+        session.vehicleId === pendingParkingRequest.vehicleId,
+    );
+
+    if (duplicateSession) {
+      Alert.alert(
+        "Parking already active",
+        "An active session now exists for this vehicle. The pending request was not added.",
+      );
+      discardPendingRequest();
+      return;
+    }
+
+    setIsStartingSession(true);
+    const confirmationTime = Date.now();
+    const expiryTimestamp =
+      confirmationTime + pendingParkingRequest.durationHours * 60 * 60 * 1000;
+
+    await startParkingSession({
+      ...pendingParkingRequest,
+      startedAt: confirmationTime,
+      expiryTimestamp,
+    });
+
+    setIsStartingSession(false);
+    discardPendingRequest();
+    Alert.alert(
+      "Parking confirmed",
+      "Tracking started from the time you confirmed the parking authority response.",
+    );
   };
 
   // const needsZoneInput = requiresZoneCode(currentParkingLocation);
@@ -595,7 +725,6 @@ const smsPreview = useMemo(() => {
                   ) : (
                     <Text style={styles.sectionSubtitleWarning}>
                       Ajman SMS parking is restricted to 1-hour bookings.
-                      Extensions can be made via renewal SMS.
                     </Text>
                   )}
                 </View>
@@ -605,7 +734,7 @@ const smsPreview = useMemo(() => {
             {smsPreview && (
               <FadeInView delay={420}>
                 <View style={styles.previewCard}>
-                  <SectionHeader title="SMS Preview" subtitle="Ready to send" />
+                  <SectionHeader title="SMS Preview" subtitle="Ready to open" />
                   <View style={styles.previewRow}>
                     <Text style={styles.previewLabel}>To</Text>
                     <Text style={styles.previewValue}>
@@ -634,9 +763,48 @@ const smsPreview = useMemo(() => {
             )}
 
             <FadeInView delay={480}>
+              {pendingParkingRequest && (
+                <View style={styles.pendingCard}>
+                  <View style={styles.pendingHeader}>
+                    <FontAwesome6
+                      name="message"
+                      size={16}
+                      color={Theme.colors.warning}
+                    />
+                    <Text style={styles.pendingTitle}>
+                      Parking confirmation pending
+                    </Text>
+                  </View>
+                  <Text style={styles.pendingText}>
+                    No timer is running yet. Confirm the SMS status after you
+                    receive the parking authority response.
+                  </Text>
+                  <View style={styles.pendingActions}>
+                    <PrimaryButton
+                      label="Cancel Request"
+                      onPress={discardPendingRequest}
+                      variant="ghost"
+                      style={styles.pendingAction}
+                    />
+                    <PrimaryButton
+                      label="Check Confirmation"
+                      onPress={() => {
+                        setConfirmationStep(
+                          confirmationStep === "authority"
+                            ? "authority"
+                            : "sent",
+                        );
+                        setIsConfirmationVisible(true);
+                      }}
+                      style={styles.pendingAction}
+                    />
+                  </View>
+                </View>
+              )}
               <PrimaryButton
-                label="Generate & Send SMS Ticket"
+                label="Open Parking SMS"
                 onPress={handleTriggerSMS}
+                disabled={!!pendingParkingRequest}
                 icon={
                   <FontAwesome6
                     name="paper-plane"
@@ -649,13 +817,78 @@ const smsPreview = useMemo(() => {
                 <Text style={styles.activeNote}>
                   {activeParkingSessions.length} active parking session
                   {activeParkingSessions.length === 1 ? "" : "s"} running.
-                  Sending this SMS will create another independent timer.
+                  A new timer starts only after you confirm the authority
+                  response.
                 </Text>
               )}
             </FadeInView>
           </>
         )}
       </ScrollView>
+
+      <Modal
+        visible={isConfirmationVisible && !!pendingParkingRequest}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsConfirmationVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmationCard}>
+            <View style={styles.confirmationIcon}>
+              <FontAwesome6
+                name={confirmationStep === "sent" ? "paper-plane" : "check"}
+                size={20}
+                color={Theme.colors.primaryGlow}
+              />
+            </View>
+            <Text style={styles.confirmationTitle}>
+              {confirmationStep === "sent"
+                ? "Did you send the parking SMS?"
+                : "Did you receive a parking confirmation SMS?"}
+            </Text>
+            <Text style={styles.confirmationText}>
+              {confirmationStep === "sent"
+                ? "Opening the SMS composer does not send the message or purchase parking."
+                : "ZoneGard should only start tracking after the parking authority confirms the transaction. ZoneGard does not verify this response itself."}
+            </Text>
+            <View style={styles.confirmationActions}>
+              {confirmationStep === "sent" ? (
+                <>
+                  <PrimaryButton
+                    label="No / Cancel"
+                    onPress={discardPendingRequest}
+                    variant="ghost"
+                    style={styles.confirmationAction}
+                  />
+                  <PrimaryButton
+                    label="Yes, I sent it"
+                    onPress={() => setConfirmationStep("authority")}
+                    style={styles.confirmationAction}
+                  />
+                </>
+              ) : (
+                <>
+                  <PrimaryButton
+                    label="Not Yet"
+                    onPress={() => setIsConfirmationVisible(false)}
+                    variant="ghost"
+                    style={styles.confirmationAction}
+                  />
+                  <PrimaryButton
+                    label={
+                      isStartingSession ? "Starting..." : "Yes, Parking Confirmed"
+                    }
+                    onPress={confirmParking}
+                    disabled={isStartingSession}
+                    variant="success"
+                    style={styles.confirmationAction}
+                  />
+                </>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScreenContainer>
   );
 }
@@ -855,6 +1088,81 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: "center",
     marginTop: Theme.spacing.md,
+  },
+  pendingCard: {
+    backgroundColor: Theme.colors.warningMuted,
+    borderRadius: Theme.radius.xl,
+    padding: Theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.warning,
+    marginBottom: Theme.spacing.lg,
+  },
+  pendingHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Theme.spacing.sm,
+    marginBottom: Theme.spacing.sm,
+  },
+  pendingTitle: {
+    color: Theme.colors.textPrimary,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  pendingText: {
+    color: Theme.colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: Theme.spacing.md,
+  },
+  pendingActions: {
+    flexDirection: "row",
+    gap: Theme.spacing.sm,
+  },
+  pendingAction: {
+    flex: 1,
+    paddingHorizontal: Theme.spacing.sm,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    padding: Theme.spacing.xl,
+    backgroundColor: "rgba(0, 0, 0, 0.72)",
+  },
+  confirmationCard: {
+    backgroundColor: Theme.colors.card,
+    borderRadius: Theme.radius.xl,
+    padding: Theme.spacing.xl,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  confirmationIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Theme.colors.primaryMuted,
+    marginBottom: Theme.spacing.lg,
+  },
+  confirmationTitle: {
+    color: Theme.colors.textPrimary,
+    fontSize: 20,
+    fontWeight: "900",
+    marginBottom: Theme.spacing.sm,
+  },
+  confirmationText: {
+    color: Theme.colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 20,
+    marginBottom: Theme.spacing.xl,
+  },
+  confirmationActions: {
+    flexDirection: "row",
+    gap: Theme.spacing.sm,
+  },
+  confirmationAction: {
+    flex: 1,
+    paddingHorizontal: Theme.spacing.sm,
   },
 
   // emirate selection

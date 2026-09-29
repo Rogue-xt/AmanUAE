@@ -94,7 +94,7 @@ export function generateParkingSMS(payload: ParkingPayload): {
     case "Ajman": {
       return {
         recipient: "5155",
-        body: `${prefix} ${cleanPlateCode} ${cleanPlateNumber} `,
+        body: `${prefix} ${cleanPlateCode} ${cleanPlateNumber}`,
       };
     }
 
