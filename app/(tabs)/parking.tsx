@@ -27,7 +27,11 @@ import {
   SectionHeader,
 } from "@/components/ui/ScreenLayout";
 import { formatEmirate } from "@/components/ui/utils";
-import { generateParkingSMS, identifyEmirateFromRegion } from "@/src/utils/parkingFormatter";
+import {
+  generateParkingSMS,
+  identifyEmirateFromRegion,
+  isKhorfakkanRegion,
+} from "@/src/utils/parkingFormatter";
 
 const DURATION_OPTIONS = [
   { value: 1, label: "1h" },
@@ -50,6 +54,17 @@ const PARKING_EMIRATES = [
   "UmmAlQuwain",
   "Fujairah",
 ] as const;
+type ParkingEmirate = (typeof PARKING_EMIRATES)[number];
+
+const getDurationOptions = (parkingEmirate: ParkingEmirate) => {
+  if (parkingEmirate === "Sharjah") return SHARJAH_DURATION_OPTIONS;
+
+  if (parkingEmirate === "Dubai" || parkingEmirate === "AbuDhabi") {
+    return DURATION_OPTIONS;
+  }
+
+  return [];
+};
 
 const ZONE_REQUIRED_EMIRATES = [
   "Dubai",
@@ -124,7 +139,7 @@ type PendingParkingRequest = {
   vehicleId: string;
   vehicleLabel: string;
   plateDetails: string;
-  parkingEmirate: (typeof PARKING_EMIRATES)[number];
+  parkingEmirate: ParkingEmirate;
   zoneCode: string;
   durationHours: number;
 };
@@ -135,7 +150,7 @@ const { vehicles, startParkingSession, parkingSessions,endParkingSession } =
 
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
   const [selectedParkingEmirate, setSelectedParkingEmirate] =
-    useState<(typeof PARKING_EMIRATES)[number]>("Dubai");
+    useState<ParkingEmirate>("Dubai");
 
   const [isPremiumAbuDhabi, setIsPremiumAbuDhabi] = useState<boolean>(false);
   const [zoneCode, setZoneCode] = useState<string>("");
@@ -143,6 +158,7 @@ const { vehicles, startParkingSession, parkingSessions,endParkingSession } =
 
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [detectedEmirate, setDetectedEmirate] = useState<string | null>(null);
+  const [isKhorfakkanDetected, setIsKhorfakkanDetected] = useState(false);
   const [pendingParkingRequest, setPendingParkingRequest] =
     useState<PendingParkingRequest | null>(null);
   const [confirmationStep, setConfirmationStep] = useState<
@@ -173,16 +189,19 @@ const { vehicles, startParkingSession, parkingSessions,endParkingSession } =
   const needsBayTypeInput = parkingRule.requiresBayType;
   const smsSupported = parkingRule.supportsSms;
   const timeSupported = parkingRule.supportsTime;
-  const durationOptions =
-    currentParkingLocation === "Sharjah"
-      ? SHARJAH_DURATION_OPTIONS
-      : DURATION_OPTIONS;
+  const parkingControlsAvailable = smsSupported && !isKhorfakkanDetected;
+  const durationOptions = getDurationOptions(currentParkingLocation);
 
-  useEffect(() => {
-    if (!durationOptions.some((option) => option.value === duration)) {
-      setDuration(1);
-    }
-  }, [duration, durationOptions]);
+  const selectParkingEmirate = (nextEmirate: ParkingEmirate) => {
+    const nextDurationOptions = getDurationOptions(nextEmirate);
+
+    setDuration((currentDuration) =>
+      nextDurationOptions.some((option) => option.value === currentDuration)
+        ? currentDuration
+        : 1,
+    );
+    setSelectedParkingEmirate(nextEmirate);
+  };
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
@@ -216,7 +235,7 @@ const { vehicles, startParkingSession, parkingSessions,endParkingSession } =
   }, []);
 
 const smsPreview = useMemo(() => {
-  if (!activeVehicle) return null;
+  if (!activeVehicle || !parkingControlsAvailable) return null;
 
   try {
     return generateParkingSMS({
@@ -237,6 +256,7 @@ const smsPreview = useMemo(() => {
   zoneCode,
   duration,
   isPremiumAbuDhabi,
+  parkingControlsAvailable,
 ]);
   const handleAutoDetectEmirate = async () => {
     setIsLocating(true);
@@ -262,15 +282,39 @@ const smsPreview = useMemo(() => {
 
       if (reverseGeocode.length > 0) {
         const place = reverseGeocode[0];
+
+        if (
+          isKhorfakkanRegion(
+            place.name,
+            place.city,
+            place.district,
+            place.subregion,
+            place.region,
+          )
+        ) {
+          setDetectedEmirate("Khorfakkan");
+          setIsKhorfakkanDetected(true);
+          setIsConfirmationVisible(false);
+          pendingParkingRequestRef.current = null;
+          setPendingParkingRequest(null);
+          setConfirmationStep("sent");
+          didLeaveForSms.current = false;
+          didShowReturnPrompt.current = false;
+          Alert.alert(
+            "Khorfakkan parking detected",
+            "Khorfakkan uses a different SMS parking format from standard Sharjah parking. Automatic SMS generation is temporarily disabled here while ZoneGard verifies this parking method.",
+          );
+          return;
+        }
+
         const targetEmirate = identifyEmirateFromRegion(
           place.region || place.city,
         );
 
         if (targetEmirate) {
+          setIsKhorfakkanDetected(false);
           setDetectedEmirate(targetEmirate);
-          setSelectedParkingEmirate(
-            targetEmirate as (typeof PARKING_EMIRATES)[number],
-          );
+          selectParkingEmirate(targetEmirate);
           Alert.alert(
             "Location Locked",
             `Detected current zone position: ${targetEmirate}`,
@@ -299,6 +343,14 @@ const smsPreview = useMemo(() => {
   };
 
   const handleTriggerSMS = async () => {
+    if (isKhorfakkanDetected) {
+      Alert.alert(
+        "Khorfakkan parking detected",
+        "Automatic SMS generation is disabled because Khorfakkan uses a different parking format from standard Sharjah parking.",
+      );
+      return;
+    }
+
     if (pendingParkingRequest) {
       Alert.alert(
         "Parking confirmation pending",
@@ -503,6 +555,25 @@ const smsPreview = useMemo(() => {
               style={styles.scanButton}
             />
           </View>
+          {isKhorfakkanDetected && (
+            <View style={styles.specialAreaCard}>
+              <FontAwesome6
+                name="triangle-exclamation"
+                size={18}
+                color={Theme.colors.warning}
+              />
+              <View style={styles.specialAreaText}>
+                <Text style={styles.specialAreaTitle}>
+                  Khorfakkan parking detected
+                </Text>
+                <Text style={styles.specialAreaDescription}>
+                  Khorfakkan uses a different SMS parking format from standard
+                  Sharjah parking. Automatic SMS generation is temporarily
+                  disabled here while ZoneGard verifies this parking method.
+                </Text>
+              </View>
+            </View>
+          )}
           <FadeInView delay={120}>
             <TouchableOpacity
               style={styles.sessionsCard}
@@ -598,7 +669,7 @@ const smsPreview = useMemo(() => {
                     styles.emirateChip,
                     active && styles.emirateChipActive,
                   ]}
-                  onPress={() => setSelectedParkingEmirate(emirate)}
+                  onPress={() => selectParkingEmirate(emirate)}
                 >
                   <Text
                     style={[
@@ -617,7 +688,7 @@ const smsPreview = useMemo(() => {
         {activeVehicle && (
           <>
             <FadeInView delay={240}>
-              {needsZoneInput && (
+              {parkingControlsAvailable && needsZoneInput && (
                 <View style={styles.zoneCard}>
                   <SectionHeader
                     title="Parking Zone"
@@ -655,7 +726,7 @@ const smsPreview = useMemo(() => {
               )}
             </FadeInView>
 
-            {needsBayTypeInput && (
+            {parkingControlsAvailable && needsBayTypeInput && (
               <View style={styles.sectionCard}>
                 <Text style={styles.sectionTitle}>Abu Dhabi Bay Type</Text>
                 <Text style={styles.sectionSubtitle}>
@@ -693,7 +764,7 @@ const smsPreview = useMemo(() => {
             )}
 
             <FadeInView delay={360}>
-              {smsSupported && (
+              {parkingControlsAvailable && (
                 <View style={styles.durationCard}>
                   <SectionHeader
                     title="Duration"
@@ -701,7 +772,7 @@ const smsPreview = useMemo(() => {
                   />
                   {timeSupported ? (
                     <View style={styles.durationRow}>
-                      {DURATION_OPTIONS.map((opt) => (
+                      {durationOptions.map((opt) => (
                         <Pressable
                           key={opt.value}
                           onPress={() => setDuration(opt.value)}
@@ -801,19 +872,21 @@ const smsPreview = useMemo(() => {
                   </View>
                 </View>
               )}
-              <PrimaryButton
-                label="Open Parking SMS"
-                onPress={handleTriggerSMS}
-                disabled={!!pendingParkingRequest}
-                icon={
-                  <FontAwesome6
-                    name="paper-plane"
-                    size={14}
-                    color={Theme.colors.textPrimary}
-                  />
-                }
-              />
-              {activeParkingSessions.length > 0 && (
+              {parkingControlsAvailable && (
+                <PrimaryButton
+                  label="Open Parking SMS"
+                  onPress={handleTriggerSMS}
+                  disabled={!!pendingParkingRequest}
+                  icon={
+                    <FontAwesome6
+                      name="paper-plane"
+                      size={14}
+                      color={Theme.colors.textPrimary}
+                    />
+                  }
+                />
+              )}
+              {parkingControlsAvailable && activeParkingSessions.length > 0 && (
                 <Text style={styles.activeNote}>
                   {activeParkingSessions.length} active parking session
                   {activeParkingSessions.length === 1 ? "" : "s"} running.
@@ -965,6 +1038,31 @@ const styles = StyleSheet.create({
     color: Theme.colors.textSecondary,
     fontSize: 13,
     lineHeight: 19,
+  },
+  specialAreaCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Theme.spacing.md,
+    backgroundColor: Theme.colors.warningMuted,
+    borderRadius: Theme.radius.xl,
+    padding: Theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.warning,
+    marginBottom: Theme.spacing.xl,
+  },
+  specialAreaText: {
+    flex: 1,
+  },
+  specialAreaTitle: {
+    color: Theme.colors.textPrimary,
+    fontSize: 14,
+    fontWeight: "900",
+    marginBottom: 4,
+  },
+  specialAreaDescription: {
+    color: Theme.colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
   },
   vehicleSlider: {
     paddingBottom: Theme.spacing.lg,

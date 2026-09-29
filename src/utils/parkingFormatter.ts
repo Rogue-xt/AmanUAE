@@ -120,6 +120,27 @@ export function generateParkingSMS(payload: ParkingPayload): {
 /**
  * Maps a reverse-geocoded city or region name string from phone hardware to our supported Emirates list.
  */
+export function isKhorfakkanRegion(
+  ...locationNames: Array<string | null | undefined>
+): boolean {
+  return locationNames.some((locationName) => {
+    if (!locationName) return false;
+
+    const normalizedName = locationName
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z]/g, "");
+
+    return [
+      "khorfakkan",
+      "khorfakan",
+      "khawrfakkan",
+      "khawrfakan",
+    ].some((variant) => normalizedName.includes(variant));
+  });
+}
+
 export function identifyEmirateFromRegion(regionName: string | null): 'Dubai' | 'AbuDhabi' | 'Sharjah' | 'Ajman' | 'RasAlKhaimah' | 'UmmAlQuwain' | 'Fujairah' | null {
   if (!regionName) return null;
   
@@ -127,7 +148,7 @@ export function identifyEmirateFromRegion(regionName: string | null): 'Dubai' | 
 
   if (lowerRegion.includes('dubai')) return 'Dubai';
   if (lowerRegion.includes('abu dhabi') || lowerRegion.includes('al ain') || lowerRegion.includes('al dhafra')) return 'AbuDhabi';
-  if (lowerRegion.includes('sharjah') || lowerRegion.includes('khor fakkan')) return 'Sharjah';
+  if (lowerRegion.includes('sharjah')) return 'Sharjah';
   if (lowerRegion.includes('ajman')) return 'Ajman';
   if (lowerRegion.includes('ras al') || lowerRegion.includes('khaimah') || lowerRegion.includes('rak')) return 'RasAlKhaimah';
   if (lowerRegion.includes('umm al') || lowerRegion.includes('quwain') || lowerRegion.includes('uaq')) return 'UmmAlQuwain';
