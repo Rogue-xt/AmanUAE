@@ -6,7 +6,6 @@ import { useApp } from "@/src/context/AppContext";
 import { Theme } from "@/constants/Theme";
 import { formatEmirate } from "@/components/ui/utils";
 import { DocumentCard } from "@/components/Documents/DocumentCard";
-import { Alert } from "react-native";
 import * as Sharing from "expo-sharing";
 import { DocumentRecord } from "@/src/context/AppContext";
 import { DocumentPreviewModal } from "@/components/Documents/DocumentPreviewModal";
@@ -19,6 +18,8 @@ import {
   prepareFileForSharing,
   openFileWithViewer,
 } from "@/src/services/documentFileService";
+import { getActiveParkingSessionsForVehicle } from "@/src/utils/parkingSessions";
+import { useZoneGardDialog } from "@/components/ui/ZoneGardDialog";
 const getDaysRemaining = (expiryDate: string) => {
   const today = new Date();
   const expiry = new Date(`${expiryDate}T00:00:00`);
@@ -36,7 +37,7 @@ export default function VehicleDetailsScreen() {
   const {
     vehicles,
     documents,
-    activeTicket,
+    parkingSessions,
     updateDocument,
     deleteDocument,
     updateVehicle,
@@ -64,6 +65,7 @@ export default function VehicleDetailsScreen() {
   const [documentEditMode, setDocumentEditMode] = React.useState<
     "edit" | "renew"
   >("edit");
+  const { showDialog, dialog } = useZoneGardDialog();
 
   const handleEditDocument = (doc: DocumentRecord) => {
     setDocumentEditMode("edit");
@@ -82,14 +84,16 @@ export default function VehicleDetailsScreen() {
   };
 
     const handleDeleteDocument = (doc: DocumentRecord) => {
-      Alert.alert("Delete Document", `Remove "${doc.title}" from vault?`, [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
+      showDialog({
+        title: "Delete Document?",
+        message: `Remove "${doc.title}" from your vault permanently?`,
+        icon: "trash",
+        secondaryAction: { label: "Cancel", onPress: () => {} },
+        destructiveAction: {
+          label: "Delete Document",
           onPress: () => deleteDocument(doc.id),
         },
-      ]);
+      });
     };
 
   const linkedDocuments = useMemo(() => {
@@ -106,7 +110,12 @@ export default function VehicleDetailsScreen() {
     const sourceUri = doc.fileUrl || doc.fileUri;
 
     if (!sourceUri) {
-      Alert.alert("No File", "This document has no attached file.");
+      showDialog({
+        title: "No File Attached",
+        message: "This document has no attached file.",
+        icon: "file-circle-xmark",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
       return;
     }
 
@@ -124,10 +133,12 @@ export default function VehicleDetailsScreen() {
     const available = await Sharing.isAvailableAsync();
 
     if (!available) {
-      Alert.alert(
-        "Unavailable",
-        "Opening files is not available on this device.",
-      );
+      showDialog({
+        title: "File Viewer Unavailable",
+        message: "Opening files is not available on this device.",
+        icon: "triangle-exclamation",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
       return;
     }
 
@@ -139,7 +150,12 @@ await openFileWithViewer(sourceUri, doc.fileName, doc.mimeType);
    const sourceUri = doc.fileUrl || doc.fileUri;
 
    if (!sourceUri) {
-     Alert.alert("No File", "This tracker has no attached document.");
+     showDialog({
+       title: "No File Attached",
+       message: "This tracker has no attached document.",
+       icon: "file-circle-xmark",
+       primaryAction: { label: "Done", onPress: () => {} },
+     });
      return;
    }
 
@@ -147,7 +163,12 @@ await openFileWithViewer(sourceUri, doc.fileName, doc.mimeType);
      const available = await Sharing.isAvailableAsync();
 
      if (!available) {
-       Alert.alert("Sharing Unavailable", "Sharing is not available here.");
+       showDialog({
+         title: "Sharing Unavailable",
+         message: "Sharing is not available on this device.",
+         icon: "share-nodes",
+         primaryAction: { label: "Done", onPress: () => {} },
+       });
        return;
      }
 
@@ -159,7 +180,12 @@ await openFileWithViewer(sourceUri, doc.fileName, doc.mimeType);
      });
    } catch (error) {
      console.error("Failed to share document:", error);
-     Alert.alert("Share Failed", "Could not share this document.");
+     showDialog({
+       title: "Could Not Share Document",
+       message: "ZoneGard could not prepare this document for sharing.",
+       icon: "triangle-exclamation",
+       primaryAction: { label: "Done", onPress: () => {} },
+     });
    }
  };
 
@@ -178,17 +204,19 @@ await openFileWithViewer(sourceUri, doc.fileName, doc.mimeType);
   const handleDeleteVehicle = () => {
     if (!vehicle) return;
 
-    Alert.alert("Delete Vehicle", `Delete "${vehicle.label}" permanently?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
+    showDialog({
+      title: "Delete Vehicle?",
+      message: `Delete "${vehicle.label}" permanently? Linked documents will remain in your vault.`,
+      icon: "trash",
+      secondaryAction: { label: "Cancel", onPress: () => {} },
+      destructiveAction: {
+        label: "Delete Vehicle",
         onPress: async () => {
           await deleteVehicle(vehicle.id);
           router.replace("/(tabs)/vehicles");
         },
       },
-    ]);
+    });
   };
 
   if (!vehicle) {
@@ -202,10 +230,11 @@ await openFileWithViewer(sourceUri, doc.fileName, doc.mimeType);
     );
   }
 
-  const isActiveParking =
-    activeTicket?.vehicleLabel === vehicle.label ||
-    activeTicket?.plateDetails ===
-      `${vehicle.plateCode} ${vehicle.plateNumber}`;
+  const activeVehicleSession = getActiveParkingSessionsForVehicle(
+    parkingSessions,
+    vehicle.id,
+  )[0];
+  const isActiveParking = !!activeVehicleSession;
 
   return (
     <View style={styles.container}>
@@ -305,15 +334,18 @@ await openFileWithViewer(sourceUri, doc.fileName, doc.mimeType);
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Parking Status</Text>
 
-          {isActiveParking && activeTicket ? (
+          {activeVehicleSession ? (
             <View style={styles.parkingBox}>
               <Text style={styles.parkingTitle}>Active Parking Session</Text>
               <Text style={styles.parkingMeta}>
-                {activeTicket.parkingEmirate} • {activeTicket.plateDetails}
+                {activeVehicleSession.parkingEmirate} •{" "}
+                {activeVehicleSession.plateDetails}
               </Text>
               <Text style={styles.parkingExpiry}>
                 Expires at{" "}
-                {new Date(activeTicket.expiryTimestamp).toLocaleTimeString([], {
+                {new Date(
+                  activeVehicleSession.expiryTimestamp,
+                ).toLocaleTimeString([], {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
@@ -385,6 +417,7 @@ await openFileWithViewer(sourceUri, doc.fileName, doc.mimeType);
           />
         </View>
       </ScrollView>
+      {dialog}
     </View>
   );
 }

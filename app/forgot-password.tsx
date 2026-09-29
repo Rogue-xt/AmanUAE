@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -16,30 +15,47 @@ import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 
 import { useAuth } from "@/src/context/AuthContext";
 import { Theme } from "@/constants/Theme";
+import { useZoneGardDialog } from "@/components/ui/ZoneGardDialog";
 
 export default function ForgotPasswordScreen() {
   const { resetPassword } = useAuth();
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { showDialog, dialog } = useZoneGardDialog();
 
   const handleReset = async () => {
     const cleanEmail = email.trim();
 
     if (!cleanEmail) {
-      Alert.alert("Email required", "Enter your email address.");
+      showDialog({
+        title: "Email Required",
+        message: "Enter your email address.",
+        icon: "envelope",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
       return;
     }
 
     try {
       setIsSubmitting(true);
       await resetPassword(cleanEmail);
-      Alert.alert(
-        "Reset link sent",
-        "Check your inbox to reset your password.",
-        [{ text: "Back to Login", onPress: () => router.replace("/auth") }],
-      );
+      showDialog({
+        title: "Reset Link Sent",
+        message: "Check your inbox to reset your password.",
+        icon: "circle-check",
+        primaryAction: {
+          label: "Back to Login",
+          onPress: () => router.replace("/auth"),
+        },
+      });
     } catch (error: any) {
-      Alert.alert("Reset failed", getAuthErrorMessage(error?.code));
+      console.error("Password reset failed:", error);
+      showDialog({
+        title: "Reset Failed",
+        message: getAuthErrorMessage(error?.code),
+        icon: "triangle-exclamation",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -112,6 +128,7 @@ export default function ForgotPasswordScreen() {
           </Pressable>
         </View>
       </ScrollView>
+      {dialog}
     </KeyboardAvoidingView>
   );
 }

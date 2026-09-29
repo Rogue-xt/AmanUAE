@@ -1,5 +1,4 @@
 import {
-  ActiveTicket,
   DocumentRecord,
   ParkingSession,
   VehicleProfile,
@@ -7,7 +6,6 @@ import {
 
 import {
   loadCloudBackup,
-  saveActiveTicketToCloud,
   saveDocumentToCloud,
   saveParkingSessionToCloud,
   saveVehicleToCloud,
@@ -33,10 +31,6 @@ export const CloudService = {
 
   saveParkingSession(uid: string, session: ParkingSession) {
     return saveParkingSessionToCloud(uid, session);
-  },
-
-  saveActiveTicket(uid: string, activeTicket: ActiveTicket | null) {
-    return saveActiveTicketToCloud(uid, activeTicket);
   },
 
   restoreUser(uid: string) {

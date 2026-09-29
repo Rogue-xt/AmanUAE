@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -19,6 +18,7 @@ import { Theme } from "@/constants/Theme";
 import { VehicleProfile } from "@/src/context/AppContext";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { SegmentedChips } from "@/components/ui/SegmentedChips";
+import { useZoneGardDialog } from "@/components/ui/ZoneGardDialog";
 import { EMIRATES_LIST, formatEmirate } from "@/components/ui/utils";
 import {
   hasVehiclePlateErrors,
@@ -63,6 +63,7 @@ export function VehicleEditModal({
     "id"
   > | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const { showDialog, dialog } = useZoneGardDialog();
 
   const emirateOptions = useMemo(
     () =>
@@ -160,10 +161,12 @@ export function VehicleEditModal({
         mode === "edit" ? vehicle?.id : undefined,
       )
     ) {
-      Alert.alert(
-        "Vehicle already saved",
-        "This vehicle is already in your garage.",
-      );
+      showDialog({
+        title: "Vehicle Already Saved",
+        message: "This vehicle is already in your garage.",
+        icon: "car-side",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
       return;
     }
 
@@ -196,7 +199,8 @@ export function VehicleEditModal({
   };
 
   return (
-    <Modal
+    <>
+      <Modal
       visible={visible}
       transparent
       animationType="slide"
@@ -416,7 +420,9 @@ export function VehicleEditModal({
           </View>
         {/* </View> */}
       </KeyboardAvoidingView>
-    </Modal>
+      </Modal>
+      {dialog}
+    </>
   );
 }
 

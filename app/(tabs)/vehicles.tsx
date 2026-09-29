@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -23,6 +22,7 @@ import {
 
 import { getDaysRemaining } from "@/components/ui/utils";
 import { VehicleEditModal } from "@/components/vehicles/VehicleEditModal";
+import { useZoneGardDialog } from "@/components/ui/ZoneGardDialog";
 
 export default function VehiclesScreen() {
   const router = useRouter();
@@ -30,6 +30,7 @@ export default function VehiclesScreen() {
     useApp();
   const [isAddVehicleOpen, setIsAddVehicleOpen] = useState(false);
   const [vehicleMode, setVehicleMode] = useState<"add" | "edit">("add");
+  const { showDialog, dialog } = useZoneGardDialog();
 
   const [editingVehicle, setEditingVehicle] = useState<VehicleProfile | null>(
     null,
@@ -59,23 +60,16 @@ export default function VehiclesScreen() {
     setIsAddVehicleOpen(true);
   };
   const handleDeleteVehicle = (vehicle: VehicleProfile) => {
-    Alert.alert(
-      "Delete Vehicle",
-      `Are you sure you want to delete "${vehicle.label}"?`,
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            await deleteVehicle(vehicle.id);
-          },
-        },
-      ],
-    );
+    showDialog({
+      title: "Delete Vehicle?",
+      message: `Delete "${vehicle.label}" permanently? Linked documents will remain in your vault.`,
+      icon: "trash",
+      secondaryAction: { label: "Cancel", onPress: () => {} },
+      destructiveAction: {
+        label: "Delete Vehicle",
+        onPress: () => deleteVehicle(vehicle.id),
+      },
+    });
   };
   return (
     <ScreenContainer>
@@ -219,6 +213,7 @@ export default function VehiclesScreen() {
           />
         </Pressable>
       )}
+      {dialog}
     </ScreenContainer>
   );
 }

@@ -40,6 +40,7 @@ import {
   PARKING_EMIRATES,
   ParkingEmirate,
 } from "@/src/config/parkingRules";
+import { getActiveParkingSessions } from "@/src/utils/parkingSessions";
 
 type PendingParkingRequest = {
   vehicleId: string;
@@ -81,11 +82,7 @@ const { vehicles, startParkingSession, parkingSessions,endParkingSession } =
 
   const activeVehicle = vehicles.find((v) => v.id === selectedVehicleId);
   const activeParkingSessions = useMemo(
-    () =>
-      parkingSessions.filter(
-        (session) =>
-          session.status === "active" && session.expiryTimestamp > Date.now(),
-      ),
+    () => getActiveParkingSessions(parkingSessions),
     [parkingSessions],
   );
 

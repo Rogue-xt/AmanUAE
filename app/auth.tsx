@@ -1,7 +1,6 @@
 import React, { useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Image,
   KeyboardAvoidingView,
@@ -17,6 +16,7 @@ import { Redirect, router } from "expo-router";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 
 import { useAuth } from "@/src/context/AuthContext";
+import { useZoneGardDialog } from "@/components/ui/ZoneGardDialog";
 
 const BRAND_YELLOW = "#FFD400";
 const BLACK = "#050505";
@@ -31,6 +31,7 @@ export default function AuthScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+  const { showDialog, dialog } = useZoneGardDialog();
 
   const fade = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(24)).current;
@@ -57,10 +58,13 @@ export default function AuthScreen() {
       setIsGoogleSubmitting(true);
       await loginWithGoogle();
     } catch (error: any) {
-      Alert.alert(
-        "Google login failed",
-        error?.message || "Could not sign in with Google.",
-      );
+      console.error("Google login failed:", error);
+      showDialog({
+        title: "Google Sign-In Failed",
+        message: "ZoneGard could not complete Google sign-in. Please try again.",
+        icon: "triangle-exclamation",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
     } finally {
       setIsGoogleSubmitting(false);
     }
@@ -70,7 +74,12 @@ export default function AuthScreen() {
     const cleanEmail = email.trim();
 
     if (!cleanEmail || !password.trim()) {
-      Alert.alert("Missing details", "Enter your email and password.");
+      showDialog({
+        title: "Missing Details",
+        message: "Enter your email and password.",
+        icon: "circle-exclamation",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
       return;
     }
 
@@ -78,7 +87,13 @@ export default function AuthScreen() {
       setIsSubmitting(true);
       await login(cleanEmail, password);
     } catch (error: any) {
-      Alert.alert("Login failed", getAuthErrorMessage(error?.code));
+      console.error("Login failed:", error);
+      showDialog({
+        title: "Login Failed",
+        message: getAuthErrorMessage(error?.code),
+        icon: "triangle-exclamation",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -210,6 +225,7 @@ export default function AuthScreen() {
           </Pressable>
         </Animated.View>
       </ScrollView>
+      {dialog}
     </KeyboardAvoidingView>
   );
 }

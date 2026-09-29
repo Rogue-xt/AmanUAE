@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -43,6 +42,7 @@ import { DocumentCard } from "@/components/Documents/DocumentCard";
 import { DocumentEditModal } from "@/components/Documents/DocumentEditModal";
 import { DocumentPreviewModal } from "@/components/Documents/DocumentPreviewModal";
 import { DocumentVehicleLinkModal } from "@/components/Documents/DocumentVehicleLinkModal";
+import { useZoneGardDialog } from "@/components/ui/ZoneGardDialog";
 import {
   prepareFileForSharing,
   openFileWithViewer,
@@ -95,6 +95,7 @@ export default function VaultScreen() {
   const [editingDocument, setEditingDocument] = useState<DocumentRecord | null>(
     null,
   );
+  const { showDialog, dialog } = useZoneGardDialog();
 
   const formatDateForStorage = (date: Date) => {
     return date.toISOString().split("T")[0];
@@ -177,17 +178,32 @@ export default function VaultScreen() {
 
   const handleAddDocument = async () => {
     if (!title.trim()) {
-      Alert.alert("Missing Title", "Enter a document title.");
+      showDialog({
+        title: "Document Title Required",
+        message: "Enter a document title.",
+        icon: "file-lines",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
       return;
     }
 
     if (!expiryDate.trim()) {
-      Alert.alert("Missing Date", "Enter an expiry date in YYYY-MM-DD format.");
+      showDialog({
+        title: "Expiry Date Required",
+        message: "Select an expiry date.",
+        icon: "calendar-day",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
       return;
     }
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(expiryDate.trim())) {
-      Alert.alert("Invalid Date", "Use this format: YYYY-MM-DD.");
+      showDialog({
+        title: "Invalid Expiry Date",
+        message: "Use the YYYY-MM-DD date format.",
+        icon: "calendar-xmark",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
       return;
     }
 
@@ -208,7 +224,12 @@ export default function VaultScreen() {
     setSelectedVehicleId("");
     setIsAddDocumentOpen(false);
 
-    Alert.alert("Saved", "Document tracker secured in your local vault.");
+    showDialog({
+      title: "Document Saved",
+      message: "The document tracker is secured in your ZoneGard vault.",
+      icon: "circle-check",
+      primaryAction: { label: "Done", onPress: () => {} },
+    });
   };
 
 
@@ -216,7 +237,12 @@ export default function VaultScreen() {
    const sourceUri = doc.fileUrl || doc.fileUri;
 
    if (!sourceUri) {
-     Alert.alert("No File", "This tracker has no attached document.");
+     showDialog({
+       title: "No File Attached",
+       message: "This tracker has no attached document.",
+       icon: "file-circle-xmark",
+       primaryAction: { label: "Done", onPress: () => {} },
+     });
      return;
    }
 
@@ -250,17 +276,24 @@ export default function VaultScreen() {
     try {
       const available = await Sharing.isAvailableAsync();
       if (!available) {
-        Alert.alert(
-          "Unavailable",
-          "Opening files is not available on this device.",
-        );
+        showDialog({
+          title: "File Viewer Unavailable",
+          message: "Opening files is not available on this device.",
+          icon: "triangle-exclamation",
+          primaryAction: { label: "Done", onPress: () => {} },
+        });
         return;
       }
 await openFileWithViewer(sourceUri, doc.fileName, doc.mimeType);
 
     } catch (error) {
       console.error("Failed to open document:", error);
-      Alert.alert("Open Failed", "Could not open this document.");
+      showDialog({
+        title: "Could Not Open Document",
+        message: "ZoneGard could not open this document.",
+        icon: "triangle-exclamation",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
     }
   };
 
@@ -268,7 +301,12 @@ const handleShareDocument = async (doc: DocumentRecord) => {
   const sourceUri = doc.fileUrl || doc.fileUri;
 
   if (!sourceUri) {
-    Alert.alert("No File", "This tracker has no attached document.");
+    showDialog({
+      title: "No File Attached",
+      message: "This tracker has no attached document.",
+      icon: "file-circle-xmark",
+      primaryAction: { label: "Done", onPress: () => {} },
+    });
     return;
   }
 
@@ -276,7 +314,12 @@ const handleShareDocument = async (doc: DocumentRecord) => {
     const available = await Sharing.isAvailableAsync();
 
     if (!available) {
-      Alert.alert("Sharing Unavailable", "Sharing is not available here.");
+      showDialog({
+        title: "Sharing Unavailable",
+        message: "Sharing is not available on this device.",
+        icon: "share-nodes",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
       return;
     }
     const shareUri = await prepareFileForSharing(sourceUri, doc.fileName);
@@ -287,19 +330,26 @@ const handleShareDocument = async (doc: DocumentRecord) => {
     });
   } catch (error) {
     console.error("Failed to share document:", error);
-    Alert.alert("Share Failed", "Could not share this document.");
+    showDialog({
+      title: "Could Not Share Document",
+      message: "ZoneGard could not prepare this document for sharing.",
+      icon: "triangle-exclamation",
+      primaryAction: { label: "Done", onPress: () => {} },
+    });
   }
 };
 
   const handleDeleteDocument = (doc: DocumentRecord) => {
-    Alert.alert("Delete Document", `Remove "${doc.title}" from vault?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
+    showDialog({
+      title: "Delete Document?",
+      message: `Remove "${doc.title}" from your vault permanently?`,
+      icon: "trash",
+      secondaryAction: { label: "Cancel", onPress: () => {} },
+      destructiveAction: {
+        label: "Delete Document",
         onPress: () => deleteDocument(doc.id),
       },
-    ]);
+    });
   };
 
 
@@ -604,6 +654,7 @@ const handleShareDocument = async (doc: DocumentRecord) => {
           />
         </Pressable>
       )}
+      {dialog}
     </ScreenContainer>
   );
 }

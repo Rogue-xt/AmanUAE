@@ -1,6 +1,5 @@
 import React from "react";
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,24 +12,29 @@ import { Stack, router } from "expo-router";
 import { Theme } from "@/constants/Theme";
 import { useAuth } from "@/src/context/AuthContext";
 import { useApp } from "@/src/context/AppContext";
+import { useZoneGardDialog } from "@/components/ui/ZoneGardDialog";
 
 export default function SettingsScreen() {
   const { user, logout } = useAuth();
   const { vehicles, documents, resetAppState } = useApp();
+  const { showDialog, dialog } = useZoneGardDialog();
 
   const handleLogout = () => {
-    Alert.alert("Logout", "Do you want to logout from ZoneGard?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Logout",
-        style: "destructive",
+    showDialog({
+      title: "Sign Out?",
+      message:
+        "You'll need to sign in again to access your synced ZoneGard data.",
+      icon: "right-from-bracket",
+      secondaryAction: { label: "Cancel", onPress: () => {} },
+      destructiveAction: {
+        label: "Sign Out",
         onPress: async () => {
-            resetAppState();
+          resetAppState();
           await logout();
           router.replace("/auth");
         },
       },
-    ]);
+    });
   };
 
   return (
@@ -130,6 +134,7 @@ export default function SettingsScreen() {
         <FontAwesome6 name="right-from-bracket" size={16} color="#B91C1C" />
         <Text style={styles.logoutText}>Logout</Text>
       </Pressable>
+      {dialog}
     </ScrollView>
   );
 }

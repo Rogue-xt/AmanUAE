@@ -3,12 +3,6 @@ import { useEffect } from "react";
 import { useAuth } from "@/src/context/AuthContext";
 import { useApp } from "@/src/context/AppContext";
 
-// import {
-//   saveActiveTicketToCloud,
-//   saveDocumentToCloud,
-//   saveParkingSessionToCloud,
-//   saveVehicleToCloud,
-// } from "@/src/services/firestoreSync";
 import { CloudService } from "@/src/services/cloudService";
 
 export function useCloudSync() {
@@ -17,7 +11,6 @@ export function useCloudSync() {
     vehicles,
     documents,
     parkingSessions,
-    activeTicket,
     isLoading,
     hasRestored,
     restoredUid,
@@ -53,10 +46,4 @@ export function useCloudSync() {
       CloudService.saveParkingSession(user.uid, session).catch(console.error);
     });
   }, [parkingSessions, user, isLoading, hasRestored, restoredUid]);
-
-  useEffect(() => {
-    if (!user?.uid || isLoading || !hasRestored || restoredUid !== user.uid)
-      return;
-    CloudService.saveActiveTicket(user.uid, activeTicket).catch(console.error);
-  }, [activeTicket, user, isLoading, hasRestored, restoredUid]);
 }

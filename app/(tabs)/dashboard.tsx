@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/utils";
 import { Image } from "expo-image";
 import { ParkingRenewalAction } from "@/components/parking/ParkingRenewalFlow";
+import { getActiveParkingSessions } from "@/src/utils/parkingSessions";
 
 export default function DashboardScreen() {
   const {
@@ -59,9 +60,7 @@ export default function DashboardScreen() {
   }, [parkingSessions, now, endParkingSession]);
 
   const activeParkingSessions = useMemo(() => {
-    return parkingSessions.filter(
-      (session) => session.status === "active" && session.expiryTimestamp > now,
-    );
+    return getActiveParkingSessions(parkingSessions, now);
   }, [parkingSessions, now]);
 
   useEffect(() => {

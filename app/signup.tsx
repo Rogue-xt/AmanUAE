@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -16,6 +15,7 @@ import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 
 import { useAuth } from "@/src/context/AuthContext";
 import { Theme } from "@/constants/Theme";
+import { useZoneGardDialog } from "@/components/ui/ZoneGardDialog";
 
 export default function SignupScreen() {
   const { user, signup } = useAuth();
@@ -25,6 +25,7 @@ export default function SignupScreen() {
   const [confirm, setConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { showDialog, dialog } = useZoneGardDialog();
 
   if (user) return <Redirect href="/(tabs)/dashboard" />;
 
@@ -32,17 +33,32 @@ export default function SignupScreen() {
     const cleanEmail = email.trim();
 
     if (!cleanEmail || !password || !confirm) {
-      Alert.alert("Missing details", "Complete all fields.");
+      showDialog({
+        title: "Missing Details",
+        message: "Complete all fields.",
+        icon: "circle-exclamation",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert("Weak password", "Password must be at least 6 characters.");
+      showDialog({
+        title: "Password Too Short",
+        message: "Password must be at least 6 characters.",
+        icon: "key",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
       return;
     }
 
     if (password !== confirm) {
-      Alert.alert("Password mismatch", "Both passwords must match.");
+      showDialog({
+        title: "Passwords Do Not Match",
+        message: "Enter the same password in both fields.",
+        icon: "circle-exclamation",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
       return;
     }
 
@@ -50,7 +66,13 @@ export default function SignupScreen() {
       setIsSubmitting(true);
       await signup(cleanEmail, password);
     } catch (error: any) {
-      Alert.alert("Signup failed", getAuthErrorMessage(error?.code));
+      console.error("Signup failed:", error);
+      showDialog({
+        title: "Sign-Up Failed",
+        message: getAuthErrorMessage(error?.code),
+        icon: "triangle-exclamation",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -163,6 +185,7 @@ export default function SignupScreen() {
           </Pressable>
         </View>
       </ScrollView>
+      {dialog}
     </KeyboardAvoidingView>
   );
 }
