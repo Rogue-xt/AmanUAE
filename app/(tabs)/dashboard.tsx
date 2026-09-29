@@ -23,6 +23,7 @@ import {
   getUrgency,
 } from "@/components/ui/utils";
 import { Image } from "expo-image";
+import { ParkingRenewalAction } from "@/components/parking/ParkingRenewalFlow";
 
 export default function DashboardScreen() {
   const {
@@ -462,6 +463,8 @@ function ActiveParkingCard({
 
         <Text style={styles.timerSub}>Expires at {expiresAt}</Text>
       </View>
+
+      <ParkingRenewalAction session={session} />
 
       <PrimaryButton
         label="End Parking"

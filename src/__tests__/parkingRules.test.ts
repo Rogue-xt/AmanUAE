@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  calculateRenewedParkingExpiry,
   clampParkingUiDuration,
   getParkingRule,
   getParkingSessionDurationHours,
@@ -77,5 +78,66 @@ test("Khorfakkan remains a blocked special parking area", () => {
   assert.equal(
     SPECIAL_PARKING_AREA_RULES.Khorfakkan.ordinarySharjahSmsBlocked,
     true,
+  );
+});
+
+test("renewal expiry extends the old expiry instead of confirmation time", () => {
+  const startedAt = Date.UTC(2026, 0, 1, 14, 0);
+  const oldExpiry = Date.UTC(2026, 0, 1, 16, 0);
+
+  assert.equal(
+    calculateRenewedParkingExpiry({
+      parkingEmirate: "Dubai",
+      startedAt,
+      expiryTimestamp: oldExpiry,
+    }),
+    Date.UTC(2026, 0, 1, 17, 0),
+  );
+});
+
+test("Abu Dhabi renewal respects parking-type maximum stay", () => {
+  const startedAt = Date.UTC(2026, 0, 1, 10, 0);
+
+  assert.equal(
+    calculateRenewedParkingExpiry({
+      parkingEmirate: "AbuDhabi",
+      parkingType: "premium",
+      startedAt,
+      expiryTimestamp: Date.UTC(2026, 0, 1, 13, 0),
+    }),
+    Date.UTC(2026, 0, 1, 14, 0),
+  );
+  assert.equal(
+    calculateRenewedParkingExpiry({
+      parkingEmirate: "AbuDhabi",
+      parkingType: "standard",
+      startedAt,
+      expiryTimestamp: Date.UTC(2026, 0, 2, 9, 0),
+    }),
+    Date.UTC(2026, 0, 2, 10, 0),
+  );
+
+  assert.throws(() =>
+    calculateRenewedParkingExpiry({
+      parkingEmirate: "AbuDhabi",
+      parkingType: "premium",
+      startedAt,
+      expiryTimestamp: Date.UTC(2026, 0, 1, 14, 0),
+    }),
+  );
+  assert.throws(() =>
+    calculateRenewedParkingExpiry({
+      parkingEmirate: "AbuDhabi",
+      parkingType: "standard",
+      startedAt,
+      expiryTimestamp: Date.UTC(2026, 0, 2, 10, 0),
+    }),
+  );
+  assert.throws(() =>
+    calculateRenewedParkingExpiry({
+      parkingEmirate: "AbuDhabi",
+      startedAt,
+      expiryTimestamp: Date.UTC(2026, 0, 1, 13, 0),
+    }),
   );
 });

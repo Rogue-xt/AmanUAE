@@ -2,7 +2,6 @@ import * as Linking from "expo-linking";
 import * as Location from "expo-location";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   AppState,
   AppStateStatus,
   Modal,
@@ -21,6 +20,7 @@ import { Theme } from "@/constants/Theme";
 import { FadeInView } from "@/components/ui/FadeInView";
 import { PremiumVehicleCard } from "@/components/ui/PremiumVehicleCard";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import { useZoneGardDialog } from "@/components/ui/ZoneGardDialog";
 import {
   ScreenContainer,
   ScreenHeader,
@@ -48,6 +48,7 @@ type PendingParkingRequest = {
   parkingEmirate: ParkingEmirate;
   zoneCode: string;
   durationHours: number;
+  parkingType?: "standard" | "premium";
 };
 
 export default function ParkingScreen() {
@@ -76,6 +77,7 @@ const { vehicles, startParkingSession, parkingSessions,endParkingSession } =
   const currentAppState = useRef<AppStateStatus>(AppState.currentState);
   const didLeaveForSms = useRef(false);
   const didShowReturnPrompt = useRef(false);
+  const { showDialog, dialog } = useZoneGardDialog();
 
   const activeVehicle = vehicles.find((v) => v.id === selectedVehicleId);
   const activeParkingSessions = useMemo(
@@ -188,10 +190,13 @@ const smsPreview = useMemo(() => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert(
-          "Permission Denied",
-          "ZoneGard needs location access to safely match regional parking codes.",
-        );
+        showDialog({
+          title: "Location Permission Needed",
+          message:
+            "ZoneGard needs location access to safely match regional parking codes.",
+          icon: "location-dot",
+          primaryAction: { label: "Done", onPress: () => {} },
+        });
         setIsLocating(false);
         return;
       }
@@ -225,10 +230,13 @@ const smsPreview = useMemo(() => {
           setConfirmationStep("sent");
           didLeaveForSms.current = false;
           didShowReturnPrompt.current = false;
-          Alert.alert(
-            "Khorfakkan parking detected",
-            "Khorfakkan uses a different SMS parking format from standard Sharjah parking. Automatic SMS generation is temporarily disabled here while ZoneGard verifies this parking method.",
-          );
+          showDialog({
+            title: "Khorfakkan Parking Detected",
+            message:
+              "Khorfakkan uses a different SMS parking format from standard Sharjah parking. Automatic SMS generation is temporarily disabled here while ZoneGard verifies this parking method.",
+            icon: "triangle-exclamation",
+            primaryAction: { label: "Understood", onPress: () => {} },
+          });
           return;
         }
 
@@ -240,28 +248,34 @@ const smsPreview = useMemo(() => {
           setIsKhorfakkanDetected(false);
           setDetectedEmirate(targetEmirate);
           selectParkingEmirate(targetEmirate);
-          Alert.alert(
-            "Location Locked",
-            `Detected current zone position: ${targetEmirate}`,
-          );
+          showDialog({
+            title: "Parking Area Detected",
+            message: `ZoneGard detected ${formatEmirate(targetEmirate)}.`,
+            icon: "location-dot",
+            primaryAction: { label: "Continue", onPress: () => {} },
+          });
 
           const matchingCar = vehicles.find((v) => v.emirate === targetEmirate);
           if (matchingCar) {
             setSelectedVehicleId(matchingCar.id);
           }
         } else {
-          Alert.alert(
-            "Boundary Check",
-            `Located inside alternative jurisdiction: ${place.region || place.city}`,
-          );
+          showDialog({
+            title: "Parking Area Unclear",
+            message: `ZoneGard could not match ${place.region || place.city} to a supported parking area.`,
+            icon: "triangle-exclamation",
+            primaryAction: { label: "Done", onPress: () => {} },
+          });
         }
       }
     } catch (error) {
       console.error(error);
-      Alert.alert(
-        "GPS Timeout",
-        "Failed to retrieve native hardware location signals.",
-      );
+      showDialog({
+        title: "Location Unavailable",
+        message: "ZoneGard could not retrieve your current location.",
+        icon: "location-crosshairs",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
     } finally {
       setIsLocating(false);
     }
@@ -269,26 +283,34 @@ const smsPreview = useMemo(() => {
 
   const handleTriggerSMS = async () => {
     if (isKhorfakkanDetected) {
-      Alert.alert(
-        "Khorfakkan parking detected",
-        "Automatic SMS generation is disabled because Khorfakkan uses a different parking format from standard Sharjah parking.",
-      );
+      showDialog({
+        title: "Khorfakkan Parking Detected",
+        message:
+          "Automatic SMS generation is disabled because Khorfakkan uses a different parking format from standard Sharjah parking.",
+        icon: "triangle-exclamation",
+        primaryAction: { label: "Understood", onPress: () => {} },
+      });
       return;
     }
 
     if (pendingParkingRequest) {
-      Alert.alert(
-        "Parking confirmation pending",
-        "Finish or cancel the current SMS confirmation before opening another parking SMS.",
-      );
+      showDialog({
+        title: "Parking Confirmation Pending",
+        message:
+          "Finish or cancel the current SMS confirmation before opening another parking SMS.",
+        icon: "clock",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
       return;
     }
 
     if (!selectedVehicleId || !activeVehicle) {
-      Alert.alert(
-        "Selection Missing",
-        "Please select a secured vehicle plate from the horizontal layout slider.",
-      );
+      showDialog({
+        title: "Select a Vehicle",
+        message: "Choose the vehicle that will use this parking session.",
+        icon: "car-side",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
       return;
     }
     const existingVehicleSession = activeParkingSessions.find(
@@ -296,21 +318,16 @@ const smsPreview = useMemo(() => {
     );
 
     if (existingVehicleSession) {
-      Alert.alert(
-        "Parking already active",
-        `An active parking session is already running for ${activeVehicle.label}. Please end the current session before starting a new one to prevent double-booking.`,
-        [
-          {
-            text: "Cancel",
-            style: "cancel",
-          },
-          {
-            text: "End Parking",
-            style: "destructive",
-            onPress: () => endParkingSession(existingVehicleSession.id),
-          },
-        ],
-      );
+      showDialog({
+        title: "Parking Already Active",
+        message: `An active parking session is already running for ${activeVehicle.label}. End it before starting another session for this vehicle.`,
+        icon: "circle-exclamation",
+        secondaryAction: { label: "Keep Parking", onPress: () => {} },
+        destructiveAction: {
+          label: "End Parking",
+          onPress: () => endParkingSession(existingVehicleSession.id),
+        },
+      });
 
       return;
     }
@@ -319,18 +336,22 @@ const smsPreview = useMemo(() => {
   const parkingRule = getParkingRule(parkingLocation);
 
   if (!parkingRule.smsSupported) {
-    Alert.alert(
-      "SMS Parking Not Supported",
-      `${formatEmirate(parkingLocation)} does not currently support SMS parking through ZoneGard. Use the local parking app, kiosk, or meter.`,
-    );
+    showDialog({
+      title: "SMS Parking Not Supported",
+      message: `${formatEmirate(parkingLocation)} does not currently support SMS parking through ZoneGard. Use the local parking app, kiosk, or meter.`,
+      icon: "triangle-exclamation",
+      primaryAction: { label: "Done", onPress: () => {} },
+    });
     return;
   }
 
   if (parkingRule.requiresZone && !zoneCode.trim()) {
-    Alert.alert(
-      "Zone Required",
-      `${formatEmirate(parkingLocation)} parking requires an accurate zone code.`,
-    );
+    showDialog({
+      title: "Zone Required",
+      message: `${formatEmirate(parkingLocation)} parking requires an accurate zone code.`,
+      icon: "map-pin",
+      primaryAction: { label: "Enter Zone", onPress: () => {} },
+    });
     return;
   }
 
@@ -360,6 +381,12 @@ const smsPreview = useMemo(() => {
         parkingEmirate: parkingLocation,
         zoneCode: zoneCode.trim(),
         durationHours: sessionDurationHours,
+        parkingType:
+          parkingLocation === "AbuDhabi"
+            ? isPremiumAbuDhabi
+              ? "premium"
+              : "standard"
+            : undefined,
       };
 
       didLeaveForSms.current = false;
@@ -376,17 +403,22 @@ const smsPreview = useMemo(() => {
         throw error;
       }
     } else {
-      Alert.alert(
-        "Device Direct Error",
-        `System failed to open SMS channel to: ${recipient}`,
-      );
+      showDialog({
+        title: "SMS Unavailable",
+        message: `ZoneGard could not open the SMS app for recipient ${recipient}.`,
+        icon: "triangle-exclamation",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
     }
   } catch (err) {
     console.error(err);
-    Alert.alert(
-      "Formatting Execution Failure",
-      "An error occurred while compiling your ticket configuration profile.",
-    );
+    showDialog({
+      title: "Parking SMS Unavailable",
+      message:
+        "ZoneGard could not safely prepare this parking message. Check the vehicle and parking details before trying again.",
+      icon: "triangle-exclamation",
+      primaryAction: { label: "Done", onPress: () => {} },
+    });
   }
   };
 
@@ -410,10 +442,13 @@ const smsPreview = useMemo(() => {
     );
 
     if (duplicateSession) {
-      Alert.alert(
-        "Parking already active",
-        "An active session now exists for this vehicle. The pending request was not added.",
-      );
+      showDialog({
+        title: "Parking Already Active",
+        message:
+          "An active session now exists for this vehicle. The pending request was not added.",
+        icon: "circle-exclamation",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
       discardPendingRequest();
       return;
     }
@@ -431,10 +466,13 @@ const smsPreview = useMemo(() => {
 
     setIsStartingSession(false);
     discardPendingRequest();
-    Alert.alert(
-      "Parking confirmed",
-      "Tracking started from the time you confirmed the parking authority response.",
-    );
+    showDialog({
+      title: "Parking Confirmed",
+      message:
+        "Tracking started from the time you confirmed the parking authority response.",
+      icon: "circle-check",
+      primaryAction: { label: "Done", onPress: () => {} },
+    });
   };
 
   return (
@@ -941,6 +979,7 @@ const smsPreview = useMemo(() => {
           </View>
         </View>
       </Modal>
+      {dialog}
     </ScreenContainer>
   );
 }

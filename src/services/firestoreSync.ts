@@ -13,6 +13,7 @@ import {
   ParkingSession,
   VehicleProfile,
 } from "@/src/context/AppContext";
+import { omitUndefinedDeep } from "@/src/utils/firestoreSerialization";
 
 export type CloudBackup = {
   vehicles: VehicleProfile[];
@@ -20,12 +21,6 @@ export type CloudBackup = {
   parkingSessions: ParkingSession[];
   activeTicket: ActiveTicket | null;
 };
-function removeUndefinedFields<T extends Record<string, any>>(data: T): T {
-  return Object.fromEntries(
-    Object.entries(data).filter(([, value]) => value !== undefined),
-  ) as T;
-}
-
 const userDoc = (uid: string) => doc(db, "users", uid);
 
 export async function saveVehicleToCloud(uid: string, vehicle: VehicleProfile) {
@@ -33,7 +28,7 @@ export async function saveVehicleToCloud(uid: string, vehicle: VehicleProfile) {
 
   console.log("Saving vehicle to:", ref.path);
 
-  await setDoc(ref, removeUndefinedFields(vehicle));
+  await setDoc(ref, omitUndefinedDeep(vehicle));
 }
 
 export async function saveDocumentToCloud(
@@ -42,7 +37,7 @@ export async function saveDocumentToCloud(
 ) {
   await setDoc(
     doc(userDoc(uid), "documents", documentData.id),
-    removeUndefinedFields(documentData),
+    omitUndefinedDeep(documentData),
   );
 }
 
@@ -54,7 +49,7 @@ export async function saveParkingSessionToCloud(
 ) {
   await setDoc(
     doc(userDoc(uid), "parkingSessions", session.id),
-    removeUndefinedFields(session),
+    omitUndefinedDeep(session),
   );
 }
 
@@ -62,9 +57,10 @@ export async function saveActiveTicketToCloud(
   uid: string,
   activeTicket: ActiveTicket | null,
 ) {
-  await setDoc(doc(userDoc(uid), "meta", "activeTicket"), {
-    value: activeTicket,
-  });
+  await setDoc(
+    doc(userDoc(uid), "meta", "activeTicket"),
+    omitUndefinedDeep({ value: activeTicket }),
+  );
 }
 
 

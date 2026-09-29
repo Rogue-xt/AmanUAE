@@ -1,7 +1,28 @@
 import {
+  getParkingRenewalRule,
   getParkingRule,
   ParkingEmirate,
 } from "@/src/config/parkingRules";
+
+export function getParkingRenewalRequest(
+  parkingArea: ParkingEmirate | "Khorfakkan",
+): {
+  recipient: string;
+  body: string;
+  extensionHours: number;
+} {
+  const renewal = getParkingRenewalRule(parkingArea);
+
+  if (!renewal.supported) {
+    throw new Error(`${parkingArea} does not support parking renewal.`);
+  }
+
+  return {
+    recipient: renewal.recipient,
+    body: renewal.command,
+    extensionHours: renewal.extensionHours,
+  };
+}
 
 export interface ParkingPayload {
   plateEmirate: ParkingEmirate;

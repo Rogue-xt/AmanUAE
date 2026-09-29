@@ -15,6 +15,7 @@ import { AppProvider } from "../src/context/AppContext";
 import { AuthProvider, useAuth } from "../src/context/AuthContext";
 import { useCloudSync } from "@/src/hooks/useCloudSync";
 import { requestNotificationPermission } from "@/src/services/notificationService";
+import { ParkingRenewalProvider } from "@/components/parking/ParkingRenewalFlow";
 
 export { ErrorBoundary } from "expo-router";
 
@@ -51,7 +52,9 @@ useEffect(() => {
   return (
     <AuthProvider>
       <AppProvider>
-        <RootLayoutNav />
+        <ParkingRenewalProvider>
+          <RootLayoutNav />
+        </ParkingRenewalProvider>
       </AppProvider>
     </AuthProvider>
   );

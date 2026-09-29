@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   generateParkingSMS,
+  getParkingRenewalRequest,
   isKhorfakkanRegion,
 } from "@/src/utils/parkingFormatter";
 
@@ -208,6 +209,40 @@ test("unsupported parking emirates are rejected", () => {
         }),
       new RegExp(`${parkingEmirate} does not support SMS parking`),
     );
+  }
+});
+
+test("renewal requests use emirate-specific recipients and commands", () => {
+  assert.deepEqual(getParkingRenewalRequest("Dubai"), {
+    recipient: "7275",
+    body: "Y",
+    extensionHours: 1,
+  });
+  assert.deepEqual(getParkingRenewalRequest("Sharjah"), {
+    recipient: "5566",
+    body: "Y",
+    extensionHours: 1,
+  });
+  assert.deepEqual(getParkingRenewalRequest("Ajman"), {
+    recipient: "5155",
+    body: "Y",
+    extensionHours: 1,
+  });
+  assert.deepEqual(getParkingRenewalRequest("AbuDhabi"), {
+    recipient: "3009",
+    body: "E",
+    extensionHours: 1,
+  });
+});
+
+test("unsupported parking areas reject renewal", () => {
+  for (const parkingArea of [
+    "RasAlKhaimah",
+    "UmmAlQuwain",
+    "Fujairah",
+    "Khorfakkan",
+  ] as const) {
+    assert.throws(() => getParkingRenewalRequest(parkingArea));
   }
 });
 

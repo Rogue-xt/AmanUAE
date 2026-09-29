@@ -1,4 +1,10 @@
-import React, { createContext, useState, useEffect, useContext } from "react";
+import React, {
+  createContext,
+  useState,
+  useEffect,
+  useContext,
+  useRef,
+} from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@/src/context/AuthContext";
 import { CloudService } from "@/src/services/cloudService";
@@ -9,6 +15,11 @@ import {
   scheduleParkingExpiredReminder,
   scheduleParkingExpiryReminder,
 } from "@/src/services/notificationService";
+import {
+  AbuDhabiParkingType,
+  calculateRenewedParkingExpiry,
+  isParkingEmirate,
+} from "@/src/config/parkingRules";
 export interface VehicleProfile {
   id: string;
   label: string;
@@ -62,6 +73,7 @@ export interface ActiveTicket {
   expiryTimestamp: number;
   expiryReminderNotificationId?: string | null;
   expiredNotificationId?: string | null;
+  parkingType?: AbuDhabiParkingType;
 }
 
 export interface ParkingSession {
@@ -72,6 +84,7 @@ export interface ParkingSession {
   parkingEmirate: string;
   zoneCode?: string;
   durationHours?: number;
+  parkingType?: AbuDhabiParkingType;
   startedAt: number;
   expiryTimestamp: number;
   endedAt?: number;
@@ -88,6 +101,7 @@ export interface StartParkingSessionInput {
 
   zoneCode?: string;
   durationHours?: number;
+  parkingType?: AbuDhabiParkingType;
 
   startedAt: number;
   expiryTimestamp: number;
@@ -119,6 +133,15 @@ interface AppContextType {
   addDocument: (doc: Omit<DocumentRecord, "id" | "createdAt">) => Promise<void>;
   deleteDocument: (id: string) => Promise<void>;
   startParkingSession: (ticket: StartParkingSessionInput) => Promise<void>;
+
+  renewParkingSession: (params: {
+    sessionId: string;
+    expectedExpiryTimestamp: number;
+  }) => Promise<{
+    renewed: boolean;
+    reason?: string;
+    notificationWarning?: boolean;
+  }>;
 
   endParkingSession: (sessionId: string) => Promise<void>;
 
@@ -163,6 +186,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [hasRestored, setHasRestored] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [restoredUid, setRestoredUid] = useState<string | null>(null);
+  const renewingSessionIds = useRef(new Set<string>());
 
   // 3. Hydration Phase: Load everything from local device memory on app bootup
   // C. Update your initial useEffect hydration block to pull active tickets on bootup
@@ -284,6 +308,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         vehicleLabel: newTicket.vehicleLabel,
         plateDetails: newTicket.plateDetails,
         parkingEmirate: newTicket.parkingEmirate,
+        parkingType: newTicket.parkingType,
 
         expiryTimestamp: newTicket.expiryTimestamp,
       };
@@ -296,6 +321,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         parkingEmirate: newTicket.parkingEmirate,
         zoneCode: newTicket.zoneCode,
         durationHours: newTicket.durationHours,
+        parkingType: newTicket.parkingType,
         startedAt,
         expiryTimestamp: newTicket.expiryTimestamp,
         status: "active",
@@ -333,6 +359,196 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       ]);
     } catch (error) {
       console.error("Failed to initialize tracking countdown layer:", error);
+    }
+  };
+
+  const renewParkingSession: AppContextType["renewParkingSession"] = async ({
+    sessionId,
+    expectedExpiryTimestamp,
+  }) => {
+    if (renewingSessionIds.current.has(sessionId)) {
+      return {
+        renewed: false,
+        reason: "This renewal is already being confirmed.",
+      };
+    }
+
+    renewingSessionIds.current.add(sessionId);
+
+    try {
+      const selectedSession = parkingSessions.find(
+        (session) => session.id === sessionId,
+      );
+
+      if (!selectedSession) {
+        return { renewed: false, reason: "Parking session not found." };
+      }
+
+      if (
+        selectedSession.status !== "active" ||
+        selectedSession.expiryTimestamp <= Date.now()
+      ) {
+        return {
+          renewed: false,
+          reason: "Expired or completed parking cannot be renewed.",
+        };
+      }
+
+      if (selectedSession.expiryTimestamp !== expectedExpiryTimestamp) {
+        return {
+          renewed: false,
+          reason: "This renewal was already applied or the session changed.",
+        };
+      }
+
+      if (!isParkingEmirate(selectedSession.parkingEmirate)) {
+        return {
+          renewed: false,
+          reason: "This parking area does not support ZoneGard renewal.",
+        };
+      }
+
+      let renewedExpiry: number;
+
+      try {
+        renewedExpiry = calculateRenewedParkingExpiry({
+          parkingEmirate: selectedSession.parkingEmirate,
+          parkingType: selectedSession.parkingType,
+          startedAt: selectedSession.startedAt,
+          expiryTimestamp: selectedSession.expiryTimestamp,
+        });
+      } catch (error) {
+        return {
+          renewed: false,
+          reason:
+            error instanceof Error
+              ? error.message
+              : "This session cannot be renewed safely.",
+        };
+      }
+
+      const cancellationResults = await Promise.allSettled([
+        cancelNotification(
+          selectedSession.expiryReminderNotificationId ?? undefined,
+        ),
+        cancelNotification(selectedSession.expiredNotificationId ?? undefined),
+      ]);
+
+      const renewedSession: ParkingSession = {
+        ...selectedSession,
+        durationHours: Math.round(
+          (renewedExpiry - selectedSession.startedAt) / (60 * 60 * 1000),
+        ),
+        expiryTimestamp: renewedExpiry,
+        expiryReminderNotificationId: null,
+        expiredNotificationId: null,
+      };
+      let updatedSessions = parkingSessions.map((session) =>
+        session.id === sessionId ? renewedSession : session,
+      );
+      let updatedActiveTicket = activeTicket;
+
+      if (activeTicket?.id === sessionId) {
+        updatedActiveTicket = {
+          ...activeTicket,
+          expiryTimestamp: renewedExpiry,
+          expiryReminderNotificationId: null,
+          expiredNotificationId: null,
+        };
+      }
+
+      setParkingSessions(updatedSessions);
+      setActiveTicket(updatedActiveTicket);
+
+      if (user?.uid) {
+        const keys = getStorageKeys(user.uid);
+        const storageUpdates: [string, string][] = [
+          [keys.parkingSessions, JSON.stringify(updatedSessions)],
+        ];
+
+        if (updatedActiveTicket) {
+          storageUpdates.push([
+            keys.activeTicket,
+            JSON.stringify(updatedActiveTicket),
+          ]);
+        }
+
+        await AsyncStorage.multiSet(storageUpdates);
+      }
+
+      const notificationResults = await Promise.allSettled([
+        scheduleParkingExpiryReminder({
+          sessionId,
+          vehicleLabel: renewedSession.vehicleLabel,
+          parkingEmirate: renewedSession.parkingEmirate,
+          expiryTimestamp: renewedExpiry,
+        }),
+        scheduleParkingExpiredReminder({
+          sessionId,
+          vehicleLabel: renewedSession.vehicleLabel,
+          parkingEmirate: renewedSession.parkingEmirate,
+          expiryTimestamp: renewedExpiry,
+        }),
+      ]);
+      const expiryReminderNotificationId =
+        notificationResults[0].status === "fulfilled"
+          ? notificationResults[0].value
+          : null;
+      const expiredNotificationId =
+        notificationResults[1].status === "fulfilled"
+          ? notificationResults[1].value
+          : null;
+
+      const sessionWithNotifications: ParkingSession = {
+        ...renewedSession,
+        expiryReminderNotificationId,
+        expiredNotificationId,
+      };
+      updatedSessions = updatedSessions.map((session) =>
+        session.id === sessionId ? sessionWithNotifications : session,
+      );
+
+      if (updatedActiveTicket?.id === sessionId) {
+        updatedActiveTicket = {
+          ...updatedActiveTicket,
+          expiryReminderNotificationId,
+          expiredNotificationId,
+        };
+      }
+
+      setParkingSessions(updatedSessions);
+      setActiveTicket(updatedActiveTicket);
+
+      if (user?.uid) {
+        const keys = getStorageKeys(user.uid);
+        const storageUpdates: [string, string][] = [
+          [keys.parkingSessions, JSON.stringify(updatedSessions)],
+        ];
+
+        if (updatedActiveTicket) {
+          storageUpdates.push([
+            keys.activeTicket,
+            JSON.stringify(updatedActiveTicket),
+          ]);
+        }
+
+        await AsyncStorage.multiSet(storageUpdates);
+      }
+
+      return {
+        renewed: true,
+        notificationWarning:
+          cancellationResults.some((result) => result.status === "rejected") ||
+          notificationResults.some((result) => result.status === "rejected"),
+      };
+    } catch (error) {
+      console.error("Failed to renew parking session:", error);
+      return {
+        renewed: false,
+        reason: "ZoneGard could not save the confirmed renewal.",
+      };
+    } finally {
+      renewingSessionIds.current.delete(sessionId);
     }
   };
 
@@ -401,6 +617,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
                 vehicleLabel: nextActiveSession.vehicleLabel,
                 plateDetails: nextActiveSession.plateDetails,
                 parkingEmirate: nextActiveSession.parkingEmirate,
+                parkingType: nextActiveSession.parkingType,
                 expiryTimestamp: nextActiveSession.expiryTimestamp,
                 expiryReminderNotificationId:
                   nextActiveSession.expiryReminderNotificationId,
@@ -778,6 +995,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         deleteDocument,
         activeTicket,
         startParkingSession,
+        renewParkingSession,
         endParkingSession,
         clearParkingSession,
         updateVehicle,

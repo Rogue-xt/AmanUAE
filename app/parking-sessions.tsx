@@ -1,20 +1,17 @@
-import React, { useMemo } from "react";
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import React, { useMemo, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Stack } from "expo-router";
 import { FontAwesome6 } from "@expo/vector-icons";
 
 import { Theme } from "@/constants/Theme";
 import { ParkingSession, useApp } from "@/src/context/AppContext";
+import { ParkingRenewalAction } from "@/components/parking/ParkingRenewalFlow";
+import { ZoneGardDialog } from "@/components/ui/ZoneGardDialog";
 
 export default function ParkingSessionsScreen() {
   const { parkingSessions, clearParkingHistory, endParkingSession } = useApp();
+  const [sessionToEnd, setSessionToEnd] = useState<ParkingSession | null>(null);
+  const [isClearHistoryVisible, setIsClearHistoryVisible] = useState(false);
 
   const groupedSessions = useMemo(() => {
     return {
@@ -22,46 +19,19 @@ export default function ParkingSessionsScreen() {
       completed: parkingSessions.filter((s) => s.status !== "active"),
     };
   }, [parkingSessions]);
-const handleEndSession = (session: ParkingSession) => {
-  Alert.alert(
-    "End parking session",
-    `End parking for ${session.vehicleLabel}?`,
-    [
-      {
-        text: "Cancel",
-        style: "cancel",
-      },
-      {
-        text: "End Parking",
-        style: "destructive",
-        onPress: () => endParkingSession(session.id),
-      },
-    ],
-  );
-};
+
   const handleClearHistory = () => {
     if (parkingSessions.length === 0) return;
-
-    Alert.alert(
-      "Clear parking history",
-      "This will delete all saved parking sessions.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Clear",
-          style: "destructive",
-          onPress: clearParkingHistory,
-        },
-      ],
-    );
+    setIsClearHistoryVisible(true);
   };
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
+    <>
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
       <Stack.Screen
         options={{
           title: "Parking Sessions",
@@ -124,7 +94,7 @@ const handleEndSession = (session: ParkingSession) => {
                 <SessionCard
                   key={session.id}
                   session={session}
-                  onEnd={() => handleEndSession(session)}
+                  onEnd={() => setSessionToEnd(session)}
                 />
               ))}
             </>
@@ -140,7 +110,50 @@ const handleEndSession = (session: ParkingSession) => {
           )}
         </>
       )}
-    </ScrollView>
+      </ScrollView>
+
+      <ZoneGardDialog
+        visible={!!sessionToEnd}
+        title="End Parking Session"
+        icon="circle-stop"
+        message={
+          sessionToEnd
+            ? `End parking for ${sessionToEnd.vehicleLabel}? The countdown will stop immediately.`
+            : undefined
+        }
+        onClose={() => setSessionToEnd(null)}
+        secondaryAction={{
+          label: "Keep Parking",
+          onPress: () => setSessionToEnd(null),
+        }}
+        destructiveAction={{
+          label: "End Parking",
+          onPress: () => {
+            if (sessionToEnd) endParkingSession(sessionToEnd.id);
+            setSessionToEnd(null);
+          },
+        }}
+      />
+
+      <ZoneGardDialog
+        visible={isClearHistoryVisible}
+        title="Clear Parking History"
+        icon="trash"
+        message="This removes all saved parking sessions from this device. Active parking timers will also be removed."
+        onClose={() => setIsClearHistoryVisible(false)}
+        secondaryAction={{
+          label: "Cancel",
+          onPress: () => setIsClearHistoryVisible(false),
+        }}
+        destructiveAction={{
+          label: "Clear History",
+          onPress: () => {
+            clearParkingHistory();
+            setIsClearHistoryVisible(false);
+          },
+        }}
+      />
+    </>
   );
 }
 
@@ -208,6 +221,7 @@ function SessionCard({
             : getDurationLabel(session.startedAt, session.expiryTimestamp)}
         </Text>
       </View>
+      {session.status === "active" && <ParkingRenewalAction session={session} />}
       {session.status === "active" && onEnd && (
         <Pressable style={styles.endSessionButton} onPress={onEnd}>
           <FontAwesome6
