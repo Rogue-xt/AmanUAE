@@ -1,27 +1,18 @@
+import {
+  getParkingRule,
+  ParkingEmirate,
+} from "@/src/config/parkingRules";
+
 export interface ParkingPayload {
-  plateEmirate:
-    | "Dubai"
-    | "AbuDhabi"
-    | "Sharjah"
-    | "Ajman"
-    | "RasAlKhaimah"
-    | "UmmAlQuwain"
-    | "Fujairah";
-  parkingEmirate:
-    | "Dubai"
-    | "AbuDhabi"
-    | "Sharjah"
-    | "Ajman"
-    | "RasAlKhaimah"
-    | "UmmAlQuwain"
-    | "Fujairah";
+  plateEmirate: ParkingEmirate;
+  parkingEmirate: ParkingEmirate;
   plateCode: string;
   plateNumber: string;
   zoneCode?: string;
   durationInHours: number;
   isPremiumAbuDhabi?: boolean;
 }
-const EMIRATE_PREFIX: Record<ParkingPayload["plateEmirate"], string> = {
+const EMIRATE_PREFIX: Record<ParkingEmirate, string> = {
   Dubai: "DXB",
   AbuDhabi: "AUH",
   Sharjah: "SHJ",
@@ -49,6 +40,11 @@ export function generateParkingSMS(payload: ParkingPayload): {
   const cleanPlateNumber = plateNumber.trim();
   const cleanZone = zoneCode ? zoneCode.trim().toUpperCase() : "";
   const prefix = EMIRATE_PREFIX[plateEmirate];
+  const parkingRule = getParkingRule(parkingEmirate);
+
+  if (!parkingRule.smsSupported) {
+    throw new Error(`${parkingEmirate} does not support SMS parking.`);
+  }
 
   switch (parkingEmirate) {
     case "Dubai": {
@@ -56,60 +52,58 @@ export function generateParkingSMS(payload: ParkingPayload): {
         throw new Error("Dubai parking requires a zone code.");
       }
 
-      const hours = Math.max(1, Math.min(24, durationInHours));
+      const hours = Math.max(
+        parkingRule.formatterMinDurationHours,
+        Math.min(parkingRule.formatterMaxDurationHours, durationInHours),
+      );
 
       if (plateEmirate === "Dubai") {
         return {
-          recipient: "7275",
+          recipient: parkingRule.recipient,
           body: `${cleanPlateCode}${cleanPlateNumber} ${cleanZone} ${hours}`,
         };
       }
 
       return {
-        recipient: "7275",
+        recipient: parkingRule.recipient,
         body: `${prefix}${cleanPlateCode} ${cleanPlateNumber} ${cleanZone} ${hours}`,
       };
     }
 
     case "AbuDhabi": {
       const typeMarker = isPremiumAbuDhabi ? "P" : "S";
-      const maxHours = isPremiumAbuDhabi ? 4 : 24;
-      const hours = Math.max(1, Math.min(maxHours, durationInHours));
+      const maxHours = isPremiumAbuDhabi
+        ? parkingRule.premiumFormatterMaxDurationHours ??
+          parkingRule.formatterMaxDurationHours
+        : parkingRule.formatterMaxDurationHours;
+      const hours = Math.max(
+        parkingRule.formatterMinDurationHours,
+        Math.min(maxHours, durationInHours),
+      );
 
       return {
-        recipient: "3009",
+        recipient: parkingRule.recipient,
         body: `${prefix}${cleanPlateCode} ${cleanPlateNumber} ${typeMarker} ${hours}`,
       };
     }
 
     case "Sharjah": {
-      const hours = Math.max(1, Math.min(24, durationInHours));
+      const hours = Math.max(
+        parkingRule.formatterMinDurationHours,
+        Math.min(parkingRule.formatterMaxDurationHours, durationInHours),
+      );
 
       return {
-        recipient: "5566",
+        recipient: parkingRule.recipient,
         body: `${prefix} ${cleanPlateNumber} ${hours}`,
       };
     }
 
     case "Ajman": {
       return {
-        recipient: "5155",
+        recipient: parkingRule.recipient,
         body: `${prefix} ${cleanPlateCode} ${cleanPlateNumber}`,
       };
-    }
-
-    // case "RasAlKhaimah": {
-    //   const hours = Math.max(1, Math.min(24, durationInHours));
-
-    //   return {
-    //     recipient: "RAK_CODE_HERE",
-    //     body: `${prefix} ${cleanPlateCode} ${cleanPlateNumber} ${hours}`,
-    //   };
-    // }
-    case "RasAlKhaimah":
-    case "UmmAlQuwain":
-    case "Fujairah": {
-      throw new Error(`${parkingEmirate} does not support SMS parking.`);
     }
 
     default: {

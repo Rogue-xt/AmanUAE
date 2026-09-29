@@ -32,108 +32,13 @@ import {
   identifyEmirateFromRegion,
   isKhorfakkanRegion,
 } from "@/src/utils/parkingFormatter";
-
-const DURATION_OPTIONS = [
-  { value: 1, label: "1h" },
-  { value: 2, label: "2h" },
-  { value: 3, label: "3h" },
-  { value: 4, label: "4h" },
-];
-const SHARJAH_DURATION_OPTIONS = [
-  { value: 1, label: "1h" },
-  { value: 2, label: "2h" },
-  { value: 3, label: "3h" },
-  { value: 5, label: "5h" },
-];
-const PARKING_EMIRATES = [
-  "Dubai",
-  "AbuDhabi",
-  "Sharjah",
-  "Ajman",
-  "RasAlKhaimah",
-  "UmmAlQuwain",
-  "Fujairah",
-] as const;
-type ParkingEmirate = (typeof PARKING_EMIRATES)[number];
-
-const getDurationOptions = (parkingEmirate: ParkingEmirate) => {
-  if (parkingEmirate === "Sharjah") return SHARJAH_DURATION_OPTIONS;
-
-  if (parkingEmirate === "Dubai" || parkingEmirate === "AbuDhabi") {
-    return DURATION_OPTIONS;
-  }
-
-  return [];
-};
-
-const ZONE_REQUIRED_EMIRATES = [
-  "Dubai",
-  "RasAlKhaimah",
-  "UmmAlQuwain",
-  "Fujairah",
-];
-
-const PARKING_RULES = {
-  Dubai: {
-    supportsSms: true,
-    supportsTime: true,
-    requiresZone: true,
-    requiresDuration: true,
-    requiresBayType: false,
-    shortcode: "7275",
-  },
-  Sharjah: {
-    supportsSms: true,
-    supportsTime: true,
-    requiresZone: false,
-    requiresDuration: true,
-    requiresBayType: false,
-    shortcode: "5566",
-  },
-  Ajman: {
-    supportsSms: true,
-    supportsTime: false,
-    requiresZone: false,
-    requiresDuration: false,
-    requiresBayType: false,
-    shortcode: "5155",
-  },
-  RasAlKhaimah: {
-    supportsSms: false,
-    supportsTime: false,
-    requiresZone: false,
-    requiresDuration: false,
-    requiresBayType: false,
-    shortcode: null,
-  },
-  AbuDhabi: {
-    supportsSms: true,
-    supportsTime: true,
-    requiresZone: false,
-    requiresDuration: true,
-    requiresBayType: true,
-    shortcode: "3009",
-  },
-  UmmAlQuwain: {
-    supportsSms: false,
-    supportsTime: false,
-    requiresZone: false,
-    requiresDuration: false,
-    requiresBayType: false,
-    shortcode: null,
-  },
-  Fujairah: {
-    supportsSms: false,
-    supportsTime: false,
-    requiresZone: false,
-    requiresDuration: false,
-    requiresBayType: false,
-    shortcode: null,
-  },
-} as const;
-const requiresZoneCode = (emirate?: string) => {
-  return !!emirate && ZONE_REQUIRED_EMIRATES.includes(emirate);
-};
+import {
+  getParkingRule,
+  getParkingSessionDurationHours,
+  getParkingUiDurations,
+  PARKING_EMIRATES,
+  ParkingEmirate,
+} from "@/src/config/parkingRules";
 
 type PendingParkingRequest = {
   vehicleId: string;
@@ -182,21 +87,20 @@ const { vehicles, startParkingSession, parkingSessions,endParkingSession } =
   );
 
   const currentParkingLocation = selectedParkingEmirate;
-  const parkingRule = PARKING_RULES[currentParkingLocation];
+  const parkingRule = getParkingRule(currentParkingLocation);
 
   const needsZoneInput = parkingRule.requiresZone;
-  const needsDurationInput = parkingRule.requiresDuration;
-  const needsBayTypeInput = parkingRule.requiresBayType;
-  const smsSupported = parkingRule.supportsSms;
-  const timeSupported = parkingRule.supportsTime;
+  const needsBayTypeInput = parkingRule.requiresParkingType;
+  const smsSupported = parkingRule.smsSupported;
+  const timeSupported = parkingRule.durationMode === "selectable";
   const parkingControlsAvailable = smsSupported && !isKhorfakkanDetected;
-  const durationOptions = getDurationOptions(currentParkingLocation);
+  const durationOptions = getParkingUiDurations(currentParkingLocation);
 
   const selectParkingEmirate = (nextEmirate: ParkingEmirate) => {
-    const nextDurationOptions = getDurationOptions(nextEmirate);
+    const nextDurationOptions = getParkingUiDurations(nextEmirate);
 
     setDuration((currentDuration) =>
-      nextDurationOptions.some((option) => option.value === currentDuration)
+      nextDurationOptions.includes(currentDuration)
         ? currentDuration
         : 1,
     );
@@ -391,9 +295,9 @@ const smsPreview = useMemo(() => {
     }
 
   const parkingLocation = currentParkingLocation;
-  const parkingRule = PARKING_RULES[parkingLocation];
+  const parkingRule = getParkingRule(parkingLocation);
 
-  if (!parkingRule.supportsSms) {
+  if (!parkingRule.smsSupported) {
     Alert.alert(
       "SMS Parking Not Supported",
       `${formatEmirate(parkingLocation)} does not currently support SMS parking through ZoneGard. Use the local parking app, kiosk, or meter.`,
@@ -424,13 +328,17 @@ const smsPreview = useMemo(() => {
     const canOpen = await Linking.canOpenURL(smsUrl);
 
     if (canOpen) {
+      const sessionDurationHours = getParkingSessionDurationHours(
+        parkingLocation,
+        duration,
+      );
       const pendingRequest: PendingParkingRequest = {
         vehicleId: activeVehicle.id,
         vehicleLabel: activeVehicle.label,
         plateDetails: `${activeVehicle.plateCode} ${activeVehicle.plateNumber}`,
         parkingEmirate: parkingLocation,
         zoneCode: zoneCode.trim(),
-        durationHours: parkingRule.requiresDuration ? duration : 1,
+        durationHours: sessionDurationHours,
       };
 
       didLeaveForSms.current = false;
@@ -507,8 +415,6 @@ const smsPreview = useMemo(() => {
       "Tracking started from the time you confirmed the parking authority response.",
     );
   };
-
-  // const needsZoneInput = requiresZoneCode(currentParkingLocation);
 
   return (
     <ScreenContainer>
@@ -743,7 +649,9 @@ const smsPreview = useMemo(() => {
                   >
                     <Text style={styles.bayTypeCode}>S</Text>
                     <Text style={styles.bayTypeTitle}>Standard</Text>
-                    <Text style={styles.bayTypeMeta}>AED 2/hr • Max 24h</Text>
+                    <Text style={styles.bayTypeMeta}>
+                      AED 2/hr • Max {parkingRule.formatterMaxDurationHours}h
+                    </Text>
                     <Text style={styles.bayTypePaint}>Turquoise + Black</Text>
                   </TouchableOpacity>
 
@@ -756,7 +664,9 @@ const smsPreview = useMemo(() => {
                   >
                     <Text style={styles.bayTypeCode}>P</Text>
                     <Text style={styles.bayTypeTitle}>Premium</Text>
-                    <Text style={styles.bayTypeMeta}>AED 3/hr • Max 4h</Text>
+                    <Text style={styles.bayTypeMeta}>
+                      AED 3/hr • Max {parkingRule.premiumFormatterMaxDurationHours}h
+                    </Text>
                     <Text style={styles.bayTypePaint}>Turquoise + White</Text>
                   </TouchableOpacity>
                 </View>
@@ -772,30 +682,30 @@ const smsPreview = useMemo(() => {
                   />
                   {timeSupported ? (
                     <View style={styles.durationRow}>
-                      {durationOptions.map((opt) => (
+                      {durationOptions.map((hours) => (
                         <Pressable
-                          key={opt.value}
-                          onPress={() => setDuration(opt.value)}
+                          key={hours}
+                          onPress={() => setDuration(hours)}
                           style={[
                             styles.durationBtn,
-                            duration === opt.value && styles.durationBtnActive,
+                            duration === hours && styles.durationBtnActive,
                           ]}
                         >
                           <Text
                             style={[
                               styles.durationBtnText,
-                              duration === opt.value &&
+                              duration === hours &&
                                 styles.durationBtnTextActive,
                             ]}
                           >
-                            {opt.label}
+                            {hours}h
                           </Text>
                         </Pressable>
                       ))}
                     </View>
                   ) : (
                     <Text style={styles.sectionSubtitleWarning}>
-                      Ajman SMS parking is restricted to 1-hour bookings.
+                      Ajman SMS parking is restricted to {parkingRule.fixedDurationHours}-hour bookings.
                     </Text>
                   )}
                 </View>
