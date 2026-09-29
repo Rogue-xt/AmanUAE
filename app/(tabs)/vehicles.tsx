@@ -201,6 +201,7 @@ export default function VehiclesScreen() {
         visible={isAddVehicleOpen}
         mode={vehicleMode}
         vehicle={editingVehicle}
+        existingVehicles={vehicles}
         onClose={() => {
           setIsAddVehicleOpen(false);
           setEditingVehicle(null);

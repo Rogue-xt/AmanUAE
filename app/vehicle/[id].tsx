@@ -376,6 +376,7 @@ await openFileWithViewer(sourceUri, doc.fileName, doc.mimeType);
             visible={isEditVehicleOpen}
             mode="edit"
             vehicle={vehicle}
+            existingVehicles={vehicles}
             onClose={() => setIsEditVehicleOpen(false)}
             onSave={async (payload) => {
               await updateVehicle(vehicle.id, payload);
