@@ -151,6 +151,21 @@ test("formatter preserves current duration boundaries", () => {
     plateNumber: "12345",
     durationInHours: 99,
   });
+  const premiumAtLimit = generateParkingSMS({
+    plateEmirate: "Dubai",
+    parkingEmirate: "AbuDhabi",
+    plateCode: "A",
+    plateNumber: "12345",
+    durationInHours: 4,
+    isPremiumAbuDhabi: true,
+  });
+  const standardAtLimit = generateParkingSMS({
+    plateEmirate: "Dubai",
+    parkingEmirate: "AbuDhabi",
+    plateCode: "A",
+    plateNumber: "12345",
+    durationInHours: 24,
+  });
   const sharjahMaximum = generateParkingSMS({
     plateEmirate: "Dubai",
     parkingEmirate: "Sharjah",
@@ -170,6 +185,8 @@ test("formatter preserves current duration boundaries", () => {
   assert.equal(dubaiMaximum.body, "A12345 332C 24");
   assert.equal(premiumMaximum.body, "DXBA 12345 P 4");
   assert.equal(standardMaximum.body, "DXBA 12345 S 24");
+  assert.equal(premiumAtLimit.body, "DXBA 12345 P 4");
+  assert.equal(standardAtLimit.body, "DXBA 12345 S 24");
   assert.equal(sharjahMaximum.body, "DXB 12345 24");
   assert.equal(ajmanIgnoresDuration.body, "AJM B 0123");
 });

@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  clampParkingUiDuration,
   getParkingRule,
   getParkingSessionDurationHours,
+  getParkingUiDurations,
   SPECIAL_PARKING_AREA_RULES,
 } from "@/src/config/parkingRules";
 
@@ -17,15 +19,24 @@ test("Dubai rules expose the current supported UI behavior", () => {
   assert.equal(rule.requiresParkingType, false);
 });
 
-test("Abu Dhabi rules preserve current UI durations and parking types", () => {
+test("Abu Dhabi rules expose Standard and Premium duration limits", () => {
   const rule = getParkingRule("AbuDhabi");
 
   assert.equal(rule.smsSupported, true);
   assert.equal(rule.recipient, "3009");
-  assert.deepEqual(rule.uiDurations, [1, 2, 3, 4]);
+  assert.equal(rule.uiDurations[0], 1);
+  assert.equal(rule.uiDurations[rule.uiDurations.length - 1], 24);
+  assert.equal(rule.uiDurations.length, 24);
+  assert.deepEqual(getParkingUiDurations("AbuDhabi", true), [1, 2, 3, 4]);
   assert.equal(rule.requiresParkingType, true);
   assert.equal(rule.formatterMaxDurationHours, 24);
   assert.equal(rule.premiumFormatterMaxDurationHours, 4);
+});
+
+test("Abu Dhabi parking type changes clamp only invalid durations", () => {
+  assert.equal(clampParkingUiDuration("AbuDhabi", 20, true), 4);
+  assert.equal(clampParkingUiDuration("AbuDhabi", 4, false), 4);
+  assert.equal(getParkingSessionDurationHours("AbuDhabi", 12), 12);
 });
 
 test("Sharjah rules protect the 1, 2, 3, 5 hour duration set", () => {

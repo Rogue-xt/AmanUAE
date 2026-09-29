@@ -54,7 +54,7 @@ export const PARKING_RULES = {
   AbuDhabi: {
     smsSupported: true,
     recipient: "3009",
-    uiDurations: [1, 2, 3, 4],
+    uiDurations: Array.from({ length: 24 }, (_, index) => index + 1),
     durationMode: "selectable",
     fixedDurationHours: null,
     requiresZone: false,
@@ -138,8 +138,46 @@ export function getParkingRule(emirate: ParkingEmirate): ParkingRule {
 
 export function getParkingUiDurations(
   emirate: ParkingEmirate,
+  isPremiumAbuDhabi = false,
 ): readonly number[] {
-  return PARKING_RULES[emirate].uiDurations;
+  const rule = PARKING_RULES[emirate];
+
+  if (
+    emirate === "AbuDhabi" &&
+    isPremiumAbuDhabi &&
+    rule.premiumFormatterMaxDurationHours !== null
+  ) {
+    return rule.uiDurations.filter(
+      (duration) => duration <= rule.premiumFormatterMaxDurationHours,
+    );
+  }
+
+  return rule.uiDurations;
+}
+
+export function clampParkingUiDuration(
+  emirate: ParkingEmirate,
+  selectedDurationHours: number,
+  isPremiumAbuDhabi = false,
+): number {
+  const durations = getParkingUiDurations(emirate, isPremiumAbuDhabi);
+
+  if (durations.length === 0) {
+    return 1;
+  }
+
+  if (durations.includes(selectedDurationHours)) {
+    return selectedDurationHours;
+  }
+
+  const minimum = durations[0];
+  const maximum = durations[durations.length - 1];
+
+  if (selectedDurationHours > maximum) {
+    return maximum;
+  }
+
+  return minimum;
 }
 
 export function getParkingSessionDurationHours(

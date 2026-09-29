@@ -33,6 +33,7 @@ import {
   isKhorfakkanRegion,
 } from "@/src/utils/parkingFormatter";
 import {
+  clampParkingUiDuration,
   getParkingRule,
   getParkingSessionDurationHours,
   getParkingUiDurations,
@@ -94,7 +95,10 @@ const { vehicles, startParkingSession, parkingSessions,endParkingSession } =
   const smsSupported = parkingRule.smsSupported;
   const timeSupported = parkingRule.durationMode === "selectable";
   const parkingControlsAvailable = smsSupported && !isKhorfakkanDetected;
-  const durationOptions = getParkingUiDurations(currentParkingLocation);
+  const durationOptions = getParkingUiDurations(
+    currentParkingLocation,
+    isPremiumAbuDhabi,
+  );
 
   const selectParkingEmirate = (nextEmirate: ParkingEmirate) => {
     const nextDurationOptions = getParkingUiDurations(nextEmirate);
@@ -105,6 +109,23 @@ const { vehicles, startParkingSession, parkingSessions,endParkingSession } =
         : 1,
     );
     setSelectedParkingEmirate(nextEmirate);
+  };
+
+  const selectAbuDhabiParkingType = (isPremium: boolean) => {
+    setIsPremiumAbuDhabi(isPremium);
+    setDuration((currentDuration) =>
+      clampParkingUiDuration("AbuDhabi", currentDuration, isPremium),
+    );
+  };
+
+  const adjustAbuDhabiDuration = (offset: -1 | 1) => {
+    const currentIndex = durationOptions.indexOf(duration);
+    const nextIndex = Math.min(
+      Math.max(currentIndex + offset, 0),
+      durationOptions.length - 1,
+    );
+
+    setDuration(durationOptions[nextIndex]);
   };
 
   useEffect(() => {
@@ -645,7 +666,7 @@ const smsPreview = useMemo(() => {
                       styles.bayTypeCard,
                       !isPremiumAbuDhabi && styles.bayTypeCardActive,
                     ]}
-                    onPress={() => setIsPremiumAbuDhabi(false)}
+                    onPress={() => selectAbuDhabiParkingType(false)}
                   >
                     <Text style={styles.bayTypeCode}>S</Text>
                     <Text style={styles.bayTypeTitle}>Standard</Text>
@@ -660,7 +681,7 @@ const smsPreview = useMemo(() => {
                       styles.bayTypeCard,
                       isPremiumAbuDhabi && styles.bayTypeCardActive,
                     ]}
-                    onPress={() => setIsPremiumAbuDhabi(true)}
+                    onPress={() => selectAbuDhabiParkingType(true)}
                   >
                     <Text style={styles.bayTypeCode}>P</Text>
                     <Text style={styles.bayTypeTitle}>Premium</Text>
@@ -680,7 +701,55 @@ const smsPreview = useMemo(() => {
                     title="Duration"
                     subtitle="Ticket length in hours"
                   />
-                  {timeSupported ? (
+                  {timeSupported && currentParkingLocation === "AbuDhabi" ? (
+                    <View style={styles.durationStepper}>
+                      <Pressable
+                        accessibilityLabel="Decrease parking duration"
+                        disabled={duration === durationOptions[0]}
+                        onPress={() => adjustAbuDhabiDuration(-1)}
+                        style={({ pressed }) => [
+                          styles.durationStepButton,
+                          duration === durationOptions[0] &&
+                            styles.durationStepButtonDisabled,
+                          pressed && styles.durationStepButtonPressed,
+                        ]}
+                      >
+                        <FontAwesome6
+                          name="minus"
+                          size={18}
+                          color={Theme.colors.textPrimary}
+                        />
+                      </Pressable>
+
+                      <View style={styles.durationStepValue}>
+                        <Text style={styles.durationStepNumber}>{duration}</Text>
+                        <Text style={styles.durationStepUnit}>
+                          {duration === 1 ? "hour" : "hours"}
+                        </Text>
+                      </View>
+
+                      <Pressable
+                        accessibilityLabel="Increase parking duration"
+                        disabled={
+                          duration === durationOptions[durationOptions.length - 1]
+                        }
+                        onPress={() => adjustAbuDhabiDuration(1)}
+                        style={({ pressed }) => [
+                          styles.durationStepButton,
+                          duration ===
+                            durationOptions[durationOptions.length - 1] &&
+                            styles.durationStepButtonDisabled,
+                          pressed && styles.durationStepButtonPressed,
+                        ]}
+                      >
+                        <FontAwesome6
+                          name="plus"
+                          size={18}
+                          color={Theme.colors.textPrimary}
+                        />
+                      </Pressable>
+                    </View>
+                  ) : timeSupported ? (
                     <View style={styles.durationRow}>
                       {durationOptions.map((hours) => (
                         <Pressable
@@ -1050,10 +1119,44 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: Theme.spacing.sm,
   },
-  // durationBtn: {
-  //   flex: 1,
-  //   paddingVertical: Theme.spacing.md,
-  // },
+  durationStepper: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: Theme.spacing.lg,
+  },
+  durationStepButton: {
+    width: 48,
+    height: 48,
+    borderRadius: Theme.radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Theme.colors.surface,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  durationStepButtonDisabled: {
+    opacity: 0.35,
+  },
+  durationStepButtonPressed: {
+    opacity: 0.7,
+  },
+  durationStepValue: {
+    flex: 1,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  durationStepNumber: {
+    color: Theme.colors.textPrimary,
+    fontSize: 24,
+    fontWeight: "900",
+  },
+  durationStepUnit: {
+    color: Theme.colors.textSecondary,
+    fontSize: 13,
+    fontWeight: "700",
+  },
   previewCard: {
     backgroundColor: Theme.colors.elevated,
     borderRadius: Theme.radius.xl,
