@@ -15,19 +15,13 @@ export function useCloudSync() {
     hasRestored,
     restoredUid,
   } = useApp();
-  console.log("Cloud sync hook running");
-  console.log("User:", user?.uid);
-  console.log("Vehicles:", vehicles.length);
-  console.log("Documents:", documents.length);
-  console.log("Parking Sessions:", parkingSessions.length);
 
   useEffect(() => {
     if (!user?.uid || isLoading || !hasRestored || restoredUid !== user.uid)
       return;
     vehicles.forEach((vehicle) => {
       CloudService.saveVehicle(user.uid, vehicle)
-        .then(() => console.log("Vehicle synced:", vehicle.id, vehicle.label))
-        .catch((error) => console.log("Vehicle sync failed:", error));
+        .catch((error: unknown) => logCloudSyncError("vehicle", error));
     });
   }, [vehicles, user, isLoading, hasRestored, restoredUid]);
 
@@ -35,7 +29,9 @@ export function useCloudSync() {
     if (!user?.uid || isLoading || !hasRestored || restoredUid !== user.uid)
       return;
     documents.forEach((documentItem) => {
-      CloudService.saveDocument(user.uid, documentItem).catch(console.error);
+      CloudService.saveDocument(user.uid, documentItem).catch(
+        (error: unknown) => logCloudSyncError("document", error),
+      );
     });
   }, [documents, user, isLoading, hasRestored, restoredUid]);
 
@@ -43,7 +39,14 @@ export function useCloudSync() {
     if (!user?.uid || isLoading || !hasRestored || restoredUid !== user.uid)
       return;
     parkingSessions.forEach((session) => {
-      CloudService.saveParkingSession(user.uid, session).catch(console.error);
+      CloudService.saveParkingSession(user.uid, session).catch(
+        (error: unknown) => logCloudSyncError("parking session", error),
+      );
     });
   }, [parkingSessions, user, isLoading, hasRestored, restoredUid]);
+}
+
+function logCloudSyncError(scope: string, error: unknown) {
+  const detail = error instanceof Error ? error.message : "Unknown error";
+  console.error(`Failed to sync ${scope}: ${detail}`);
 }

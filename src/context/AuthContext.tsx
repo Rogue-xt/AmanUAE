@@ -7,7 +7,7 @@ import React, {
 } from "react";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import {
-  User,
+  type User,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,

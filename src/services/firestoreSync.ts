@@ -25,8 +25,6 @@ const userDoc = (uid: string) => doc(db, "users", uid);
 export async function saveVehicleToCloud(uid: string, vehicle: VehicleProfile) {
   const ref = doc(db, "users", uid, "vehicles", vehicle.id);
 
-  console.log("Saving vehicle to:", ref.path);
-
   await setDoc(ref, omitUndefinedDeep(vehicle));
 }
 

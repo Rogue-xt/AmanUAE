@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { Redirect, router } from "expo-router";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
+import { FirebaseError } from "firebase/app";
 
 import { useAuth } from "@/src/context/AuthContext";
 import { useZoneGardDialog } from "@/components/ui/ZoneGardDialog";
@@ -57,8 +58,8 @@ export default function AuthScreen() {
     try {
       setIsGoogleSubmitting(true);
       await loginWithGoogle();
-    } catch (error: any) {
-      console.error("Google login failed:", error);
+    } catch (error: unknown) {
+      logAuthError("Google login failed", error);
       showDialog({
         title: "Google Sign-In Failed",
         message: "ZoneGard could not complete Google sign-in. Please try again.",
@@ -86,11 +87,11 @@ export default function AuthScreen() {
     try {
       setIsSubmitting(true);
       await login(cleanEmail, password);
-    } catch (error: any) {
-      console.error("Login failed:", error);
+    } catch (error: unknown) {
+      logAuthError("Login failed", error);
       showDialog({
         title: "Login Failed",
-        message: getAuthErrorMessage(error?.code),
+        message: getAuthErrorMessage(getFirebaseErrorCode(error)),
         icon: "triangle-exclamation",
         primaryAction: { label: "Done", onPress: () => {} },
       });
@@ -245,6 +246,20 @@ function getAuthErrorMessage(code?: string) {
     default:
       return "Something went wrong. Try again.";
   }
+}
+
+function getFirebaseErrorCode(error: unknown) {
+  return error instanceof FirebaseError ? error.code : undefined;
+}
+
+function logAuthError(context: string, error: unknown) {
+  const detail =
+    error instanceof FirebaseError
+      ? error.code
+      : error instanceof Error
+        ? error.message
+        : "Unknown authentication error";
+  console.error(`${context}: ${detail}`);
 }
 
 const styles = StyleSheet.create({

@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { Redirect, router } from "expo-router";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
+import { FirebaseError } from "firebase/app";
 
 import { useAuth } from "@/src/context/AuthContext";
 import { Theme } from "@/constants/Theme";
@@ -65,11 +66,11 @@ export default function SignupScreen() {
     try {
       setIsSubmitting(true);
       await signup(cleanEmail, password);
-    } catch (error: any) {
-      console.error("Signup failed:", error);
+    } catch (error: unknown) {
+      logAuthError("Signup failed", error);
       showDialog({
         title: "Sign-Up Failed",
-        message: getAuthErrorMessage(error?.code),
+        message: getAuthErrorMessage(getFirebaseErrorCode(error)),
         icon: "triangle-exclamation",
         primaryAction: { label: "Done", onPress: () => {} },
       });
@@ -201,6 +202,20 @@ function getAuthErrorMessage(code?: string) {
     default:
       return "Something went wrong. Try again.";
   }
+}
+
+function getFirebaseErrorCode(error: unknown) {
+  return error instanceof FirebaseError ? error.code : undefined;
+}
+
+function logAuthError(context: string, error: unknown) {
+  const detail =
+    error instanceof FirebaseError
+      ? error.code
+      : error instanceof Error
+        ? error.message
+        : "Unknown authentication error";
+  console.error(`${context}: ${detail}`);
 }
 
 const styles = StyleSheet.create({
