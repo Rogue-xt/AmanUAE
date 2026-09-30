@@ -455,7 +455,7 @@ const smsPreview = useMemo(() => {
     const expiryTimestamp =
       confirmationTime + pendingParkingRequest.durationHours * 60 * 60 * 1000;
 
-    await startParkingSession({
+    const startResult = await startParkingSession({
       ...pendingParkingRequest,
       startedAt: confirmationTime,
       expiryTimestamp,
@@ -463,10 +463,21 @@ const smsPreview = useMemo(() => {
 
     setIsStartingSession(false);
     discardPendingRequest();
+    if (!startResult.started) {
+      showDialog({
+        title: "Tracking Not Started",
+        message:
+          "ZoneGard could not save this parking session. Please try again.",
+        icon: "circle-exclamation",
+        primaryAction: { label: "Done", onPress: () => {} },
+      });
+      return;
+    }
     showDialog({
       title: "Parking Confirmed",
-      message:
-        "Tracking started from the time you confirmed the parking authority response.",
+      message: startResult.notificationWarning
+        ? "Tracking started, but ZoneGard could not schedule parking reminders. Check notification permissions."
+        : "Tracking started from the time you confirmed the parking authority response.",
       icon: "circle-check",
       primaryAction: { label: "Done", onPress: () => {} },
     });

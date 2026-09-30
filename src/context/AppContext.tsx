@@ -1,25 +1,33 @@
 import React, {
+  useCallback,
   createContext,
   useState,
   useEffect,
   useContext,
   useRef,
 } from "react";
+import { AppState } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@/src/context/AuthContext";
 import { CloudService } from "@/src/services/cloudService";
 import {
   cancelNotification,
   cancelDocumentExpiryReminders,
+  cancelScheduledParkingNotificationsForSession,
+  getScheduledNotifications,
+  reconcileParkingNotifications,
   scheduleDocumentExpiryReminders,
-  scheduleParkingExpiredReminder,
-  scheduleParkingExpiryReminder,
 } from "@/src/services/notificationService";
 import {
   AbuDhabiParkingType,
   calculateRenewedParkingExpiry,
   isParkingEmirate,
 } from "@/src/config/parkingRules";
+import {
+  reconcileParkingSessions,
+  retainActiveParkingSessions,
+  stripParkingNotificationIds,
+} from "@/src/utils/parkingSessions";
 export interface VehicleProfile {
   id: string;
   label: string;
@@ -119,7 +127,10 @@ interface AppContextType {
   deleteVehicle: (id: string) => Promise<void>;
   addDocument: (doc: Omit<DocumentRecord, "id" | "createdAt">) => Promise<void>;
   deleteDocument: (id: string) => Promise<void>;
-  startParkingSession: (ticket: StartParkingSessionInput) => Promise<void>;
+  startParkingSession: (ticket: StartParkingSessionInput) => Promise<{
+    started: boolean;
+    notificationWarning?: boolean;
+  }>;
 
   renewParkingSession: (params: {
     sessionId: string;
@@ -133,7 +144,10 @@ interface AppContextType {
   endParkingSession: (sessionId: string) => Promise<void>;
 
   parkingSessions: ParkingSession[];
-  clearParkingHistory: () => Promise<void>;
+  clearParkingHistory: () => Promise<{
+    cleared: boolean;
+    reason?: string;
+  }>;
   resetAppState: () => void;
   updateVehicle: (
     id: string,
@@ -170,6 +184,115 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [restoredUid, setRestoredUid] = useState<string | null>(null);
   const renewingSessionIds = useRef(new Set<string>());
+  const parkingSessionsRef = useRef<ParkingSession[]>([]);
+  const reliabilityInFlight = useRef(false);
+  const activeUidRef = useRef(user?.uid);
+  activeUidRef.current = user?.uid;
+
+  useEffect(() => {
+    parkingSessionsRef.current = parkingSessions;
+  }, [parkingSessions]);
+
+  const persistParkingSessions = useCallback(
+    async (uid: string, sessions: ParkingSession[]) => {
+      if (activeUidRef.current !== uid) return;
+      parkingSessionsRef.current = sessions;
+      setParkingSessions(sessions);
+      const keys = getStorageKeys(uid);
+      await AsyncStorage.setItem(
+        keys.parkingSessions,
+        JSON.stringify(sessions),
+      );
+    },
+    [],
+  );
+
+  const prepareParkingSessions = useCallback(
+    async (
+      sessions: ParkingSession[],
+      uid: string,
+      options?: { stripCloudNotificationIds?: boolean },
+    ) => {
+      const now = Date.now();
+      let prepared = reconcileParkingSessions(sessions, now);
+      if (options?.stripCloudNotificationIds) {
+        prepared = stripParkingNotificationIds(prepared);
+      }
+
+      let scheduledRequests;
+      try {
+        scheduledRequests = await getScheduledNotifications();
+      } catch (error) {
+        console.warn("Could not inspect scheduled parking reminders:", error);
+        return { sessions: prepared, notificationWarning: true };
+      }
+
+      let notificationWarning = false;
+      const repaired: ParkingSession[] = [];
+      for (const session of prepared) {
+        if (session.status !== "active" || session.expiryTimestamp <= now) {
+          const cancellationResults =
+            await cancelScheduledParkingNotificationsForSession(
+              session,
+              uid,
+              scheduledRequests,
+            );
+          notificationWarning ||= cancellationResults.some(
+            (result) => result.status === "rejected",
+          );
+          repaired.push(session);
+          continue;
+        }
+
+        const notificationState = await reconcileParkingNotifications({
+          session,
+          ownerUid: uid,
+          scheduledRequests,
+          now,
+        });
+        notificationWarning ||= notificationState.notificationWarning;
+        repaired.push({
+          ...session,
+          expiryReminderNotificationId:
+            notificationState.expiryReminderNotificationId,
+          expiredNotificationId: notificationState.expiredNotificationId,
+        });
+      }
+
+      return { sessions: repaired, notificationWarning };
+    },
+    [],
+  );
+
+  const reconcileParkingReliability = useCallback(async () => {
+    const uid = user?.uid;
+    if (
+      !uid ||
+      !hasRestored ||
+      restoredUid !== uid ||
+      reliabilityInFlight.current
+    ) {
+      return;
+    }
+
+    reliabilityInFlight.current = true;
+    try {
+      const sourceSessions = parkingSessionsRef.current;
+      const prepared = await prepareParkingSessions(sourceSessions, uid);
+      if (parkingSessionsRef.current !== sourceSessions) return;
+      await persistParkingSessions(uid, prepared.sessions);
+    } catch (error) {
+      console.error("Failed to reconcile parking reliability:", error);
+    } finally {
+      reliabilityInFlight.current = false;
+    }
+  }, [
+    hasRestored,
+    persistParkingSessions,
+    prepareParkingSessions,
+    restoredUid,
+    user?.uid,
+  ]);
 
   // 3. Hydration Phase: Load everything from local device memory on app bootup
   useEffect(() => {
@@ -196,6 +319,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
             AsyncStorage.getItem(keys.documents),
             AsyncStorage.getItem(keys.parkingSessions),
           ]);
+        if (activeUidRef.current !== user.uid) return;
 
         const hasLocalData =
           storedVehicles || storedDocs || storedParkingSessions;
@@ -211,24 +335,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
             const parsedSessions: ParkingSession[] = JSON.parse(
               storedParkingSessions,
             );
-
-            const normalizedSessions = parsedSessions.map((session) =>
-              session.status === "active" &&
-              session.expiryTimestamp <= Date.now()
-                ? {
-                    ...session,
-                    status: "expired" as const,
-                    endedAt: session.expiryTimestamp,
-                  }
-                : session,
+            const prepared = await prepareParkingSessions(
+              parsedSessions,
+              user.uid,
             );
-
-            setParkingSessions(normalizedSessions);
-
-            await AsyncStorage.setItem(
-              keys.parkingSessions,
-              JSON.stringify(normalizedSessions),
-            );
+            await persistParkingSessions(user.uid, prepared.sessions);
           } else {
             setParkingSessions([]);
           }
@@ -238,15 +349,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         }
 
         const cloud = await CloudService.restoreUser(user.uid);
+        if (activeUidRef.current !== user.uid) return;
 
         setVehicles(cloud.vehicles);
         setDocuments(cloud.documents);
-        setParkingSessions(cloud.parkingSessions);
+        const preparedParking = await prepareParkingSessions(
+          cloud.parkingSessions,
+          user.uid,
+          { stripCloudNotificationIds: true },
+        );
+        setParkingSessions(preparedParking.sessions);
 
         await AsyncStorage.multiSet([
           [keys.vehicles, JSON.stringify(cloud.vehicles)],
           [keys.documents, JSON.stringify(cloud.documents)],
-          [keys.parkingSessions, JSON.stringify(cloud.parkingSessions)],
+          [keys.parkingSessions, JSON.stringify(preparedParking.sessions)],
         ]);
         setRestoredUid(user.uid);
         setHasRestored(true);
@@ -258,9 +375,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     loadStoredData();
-  }, [user?.uid]);
+  }, [persistParkingSessions, prepareParkingSessions, user?.uid]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        void reconcileParkingReliability();
+      }
+    });
+    return () => subscription.remove();
+  }, [reconcileParkingReliability]);
+
+  useEffect(() => {
+    const nextExpiry = parkingSessions
+      .filter((session) => session.status === "active")
+      .reduce<number | null>(
+        (earliest, session) =>
+          earliest === null || session.expiryTimestamp < earliest
+            ? session.expiryTimestamp
+            : earliest,
+        null,
+      );
+    if (nextExpiry === null || !user?.uid) return;
+
+    const delay = Math.max(0, nextExpiry - Date.now() + 50);
+    const timer = setTimeout(
+      () => void reconcileParkingReliability(),
+      Math.min(delay, 2_147_483_647),
+    );
+    return () => clearTimeout(timer);
+  }, [parkingSessions, reconcileParkingReliability, user?.uid]);
 
   const startParkingSession = async (newTicket: StartParkingSessionInput) => {
+    if (!user?.uid) return { started: false };
+
+    let sessionPersisted = false;
     try {
       const startedAt = newTicket.startedAt ?? Date.now();
       const sessionId = Date.now().toString();
@@ -278,34 +427,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         expiryTimestamp: newTicket.expiryTimestamp,
         status: "active",
       };
-      const expiryReminderNotificationId = await scheduleParkingExpiryReminder({
-        sessionId,
-        vehicleLabel: sessionRecord.vehicleLabel,
-        parkingEmirate: sessionRecord.parkingEmirate,
-        expiryTimestamp: sessionRecord.expiryTimestamp,
-      });
+      const updatedSessions = [sessionRecord, ...parkingSessionsRef.current];
+      await persistParkingSessions(user.uid, updatedSessions);
+      sessionPersisted = true;
 
-      const expiredNotificationId = await scheduleParkingExpiredReminder({
-        sessionId,
-        vehicleLabel: sessionRecord.vehicleLabel,
-        parkingEmirate: sessionRecord.parkingEmirate,
-        expiryTimestamp: sessionRecord.expiryTimestamp,
-      });
-
-      sessionRecord.expiryReminderNotificationId = expiryReminderNotificationId;
-      sessionRecord.expiredNotificationId = expiredNotificationId;
-
-      const updatedSessions = [sessionRecord, ...parkingSessions];
-
-      setParkingSessions(updatedSessions);
-      if (!user?.uid) return;
-      const keys = getStorageKeys(user.uid);
-      await AsyncStorage.setItem(
-        keys.parkingSessions,
-        JSON.stringify(updatedSessions),
+      const prepared = await prepareParkingSessions(
+        updatedSessions,
+        user.uid,
       );
+      await persistParkingSessions(user.uid, prepared.sessions);
+      return {
+        started: true,
+        notificationWarning: prepared.notificationWarning,
+      };
     } catch (error) {
       console.error("Failed to initialize tracking countdown layer:", error);
+      return {
+        started: sessionPersisted,
+        notificationWarning: sessionPersisted,
+      };
     }
   };
 
@@ -323,7 +463,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     renewingSessionIds.current.add(sessionId);
 
     try {
-      const selectedSession = parkingSessions.find(
+      const currentSessions = parkingSessionsRef.current;
+      const selectedSession = currentSessions.find(
         (session) => session.id === sessionId,
       );
 
@@ -390,7 +531,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         expiryReminderNotificationId: null,
         expiredNotificationId: null,
       };
-      let updatedSessions = parkingSessions.map((session) =>
+      let updatedSessions = currentSessions.map((session) =>
         session.id === sessionId ? renewedSession : session,
       );
       setParkingSessions(updatedSessions);
@@ -403,53 +544,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         );
       }
 
-      const notificationResults = await Promise.allSettled([
-        scheduleParkingExpiryReminder({
-          sessionId,
-          vehicleLabel: renewedSession.vehicleLabel,
-          parkingEmirate: renewedSession.parkingEmirate,
-          expiryTimestamp: renewedExpiry,
-        }),
-        scheduleParkingExpiredReminder({
-          sessionId,
-          vehicleLabel: renewedSession.vehicleLabel,
-          parkingEmirate: renewedSession.parkingEmirate,
-          expiryTimestamp: renewedExpiry,
-        }),
-      ]);
-      const expiryReminderNotificationId =
-        notificationResults[0].status === "fulfilled"
-          ? notificationResults[0].value
-          : null;
-      const expiredNotificationId =
-        notificationResults[1].status === "fulfilled"
-          ? notificationResults[1].value
-          : null;
-
-      const sessionWithNotifications: ParkingSession = {
-        ...renewedSession,
-        expiryReminderNotificationId,
-        expiredNotificationId,
-      };
-      updatedSessions = updatedSessions.map((session) =>
-        session.id === sessionId ? sessionWithNotifications : session,
+      let notificationWarning = cancellationResults.some(
+        (result) => result.status === "rejected",
       );
-
-      setParkingSessions(updatedSessions);
-
       if (user?.uid) {
-        const keys = getStorageKeys(user.uid);
-        await AsyncStorage.setItem(
-          keys.parkingSessions,
-          JSON.stringify(updatedSessions),
+        const prepared = await prepareParkingSessions(
+          updatedSessions,
+          user.uid,
         );
+        updatedSessions = prepared.sessions;
+        notificationWarning ||= prepared.notificationWarning;
+        await persistParkingSessions(user.uid, updatedSessions);
       }
 
       return {
         renewed: true,
-        notificationWarning:
-          cancellationResults.some((result) => result.status === "rejected") ||
-          notificationResults.some((result) => result.status === "rejected"),
+        notificationWarning,
       };
     } catch (error) {
       console.error("Failed to renew parking session:", error);
@@ -464,7 +574,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const endParkingSession = async (sessionId: string) => {
     try {
-        const selectedSession = parkingSessions.find(
+        const currentSessions = parkingSessionsRef.current;
+        const selectedSession = currentSessions.find(
           (session) => session.id === sessionId,
         );
 
@@ -477,18 +588,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
           return;
         }
 
-        await Promise.all([
-          cancelNotification(
-            selectedSession.expiryReminderNotificationId ?? undefined,
-          ),
-          cancelNotification(
-            selectedSession.expiredNotificationId ?? undefined,
-          ),
-        ]);
-
         const now = Date.now();
-
-        const updatedSessions: ParkingSession[] = parkingSessions.map(
+        const updatedSessions: ParkingSession[] = currentSessions.map(
           (session) =>
             session.id === sessionId
               ? {
@@ -497,22 +598,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
                     session.expiryTimestamp <= now
                       ? ("expired" as const)
                       : ("completed" as const),
-                  endedAt: now,
+                  endedAt:
+                    session.expiryTimestamp <= now
+                      ? session.expiryTimestamp
+                      : now,
                   expiryReminderNotificationId: null,
                   expiredNotificationId: null,
                 }
               : session,
         );
 
-        setParkingSessions(updatedSessions);
+        if (user?.uid) {
+          await persistParkingSessions(user.uid, updatedSessions);
+        } else {
+          parkingSessionsRef.current = updatedSessions;
+          setParkingSessions(updatedSessions);
+        }
 
-        if (!user?.uid) return;
-
-        const keys = getStorageKeys(user.uid);
-        await AsyncStorage.setItem(
-          keys.parkingSessions,
-          JSON.stringify(updatedSessions),
-        );
+        await Promise.allSettled([
+          cancelNotification(
+            selectedSession.expiryReminderNotificationId ?? undefined,
+          ),
+          cancelNotification(
+            selectedSession.expiredNotificationId ?? undefined,
+          ),
+        ]);
     } catch (error) {
       console.error("Failed to end selected parking session:", error);
     }
@@ -755,18 +865,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const resetAppState = () => {
+    parkingSessionsRef.current = [];
     setVehicles([]);
     setDocuments([]);
     setParkingSessions([]);
   };
   const clearParkingHistory = async () => {
+    if (!user?.uid) {
+      return { cleared: false, reason: "You must be signed in." };
+    }
+
     try {
-      setParkingSessions([]);
-      if (!user?.uid) return;
+      const now = Date.now();
+      const reconciled = reconcileParkingSessions(
+        parkingSessionsRef.current,
+        now,
+      );
+      const retainedSessions = retainActiveParkingSessions(reconciled, now);
+      const retainedIds = new Set(
+        retainedSessions.map((session) => session.id),
+      );
+      const historicalIds = reconciled
+        .filter((session) => !retainedIds.has(session.id))
+        .map((session) => session.id);
+
+      await CloudService.deleteParkingSessions(user.uid, historicalIds);
       const keys = getStorageKeys(user.uid);
-      await AsyncStorage.removeItem(keys.parkingSessions);
+      await AsyncStorage.setItem(
+        keys.parkingSessions,
+        JSON.stringify(retainedSessions),
+      );
+      parkingSessionsRef.current = retainedSessions;
+      setParkingSessions(retainedSessions);
+      return { cleared: true };
     } catch (error) {
       console.error("Failed to clear parking history:", error);
+      return {
+        cleared: false,
+        reason: "Couldn't clear parking history. Please try again.",
+      };
     }
   };
   const restoreFromCloud = async (uid: string) => {
@@ -778,15 +915,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
       const keys = getStorageKeys(uid);
       const cloud = await CloudService.restoreUser(uid);
+      if (activeUidRef.current !== uid) return;
 
       setVehicles(cloud.vehicles);
       setDocuments(cloud.documents);
-      setParkingSessions(cloud.parkingSessions);
+      const preparedParking = await prepareParkingSessions(
+        cloud.parkingSessions,
+        uid,
+        { stripCloudNotificationIds: true },
+      );
+      setParkingSessions(preparedParking.sessions);
 
       await AsyncStorage.multiSet([
         [keys.vehicles, JSON.stringify(cloud.vehicles)],
         [keys.documents, JSON.stringify(cloud.documents)],
-        [keys.parkingSessions, JSON.stringify(cloud.parkingSessions)],
+        [keys.parkingSessions, JSON.stringify(preparedParking.sessions)],
       ]);
       setRestoredUid(uid);
       setHasRestored(true);

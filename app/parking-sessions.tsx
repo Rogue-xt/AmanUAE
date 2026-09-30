@@ -6,12 +6,16 @@ import { FontAwesome6 } from "@expo/vector-icons";
 import { Theme } from "@/constants/Theme";
 import { ParkingSession, useApp } from "@/src/context/AppContext";
 import { ParkingRenewalAction } from "@/components/parking/ParkingRenewalFlow";
-import { ZoneGardDialog } from "@/components/ui/ZoneGardDialog";
+import {
+  useZoneGardDialog,
+  ZoneGardDialog,
+} from "@/components/ui/ZoneGardDialog";
 
 export default function ParkingSessionsScreen() {
   const { parkingSessions, clearParkingHistory, endParkingSession } = useApp();
   const [sessionToEnd, setSessionToEnd] = useState<ParkingSession | null>(null);
   const [isClearHistoryVisible, setIsClearHistoryVisible] = useState(false);
+  const { showDialog, dialog } = useZoneGardDialog();
 
   const groupedSessions = useMemo(() => {
     return {
@@ -21,7 +25,7 @@ export default function ParkingSessionsScreen() {
   }, [parkingSessions]);
 
   const handleClearHistory = () => {
-    if (parkingSessions.length === 0) return;
+    if (groupedSessions.completed.length === 0) return;
     setIsClearHistoryVisible(true);
   };
 
@@ -36,7 +40,7 @@ export default function ParkingSessionsScreen() {
         options={{
           title: "Parking Sessions",
           headerRight: () =>
-            parkingSessions.length > 0 ? (
+            groupedSessions.completed.length > 0 ? (
               <Pressable onPress={handleClearHistory} style={styles.clearBtn}>
                 <Text style={styles.clearText}>Clear</Text>
               </Pressable>
@@ -114,20 +118,20 @@ export default function ParkingSessionsScreen() {
 
       <ZoneGardDialog
         visible={!!sessionToEnd}
-        title="End Parking Session"
+        title="End Tracking"
         icon="circle-stop"
         message={
           sessionToEnd
-            ? `End parking for ${sessionToEnd.vehicleLabel}? The countdown will stop immediately.`
+            ? `Stop tracking parking for ${sessionToEnd.vehicleLabel}? This does not cancel parking with the authority.`
             : undefined
         }
         onClose={() => setSessionToEnd(null)}
         secondaryAction={{
-          label: "Keep Parking",
+          label: "Keep Tracking",
           onPress: () => setSessionToEnd(null),
         }}
         destructiveAction={{
-          label: "End Parking",
+          label: "End Tracking",
           onPress: () => {
             if (sessionToEnd) endParkingSession(sessionToEnd.id);
             setSessionToEnd(null);
@@ -139,7 +143,7 @@ export default function ParkingSessionsScreen() {
         visible={isClearHistoryVisible}
         title="Clear Parking History"
         icon="trash"
-        message="This removes all saved parking sessions from this device. Active parking timers will also be removed."
+        message="This removes completed and expired parking sessions from this device and cloud backup. Active parking tracking is preserved."
         onClose={() => setIsClearHistoryVisible(false)}
         secondaryAction={{
           label: "Cancel",
@@ -147,12 +151,23 @@ export default function ParkingSessionsScreen() {
         }}
         destructiveAction={{
           label: "Clear History",
-          onPress: () => {
-            clearParkingHistory();
+          onPress: async () => {
             setIsClearHistoryVisible(false);
+            const result = await clearParkingHistory();
+            showDialog({
+              title: result.cleared
+                ? "Parking History Cleared"
+                : "History Not Cleared",
+              message: result.cleared
+                ? "Completed and expired parking sessions were removed. Active tracking was preserved."
+                : result.reason,
+              icon: result.cleared ? "circle-check" : "circle-exclamation",
+              primaryAction: { label: "Done", onPress: () => {} },
+            });
           },
         }}
       />
+      {dialog}
     </>
   );
 }
@@ -230,7 +245,7 @@ function SessionCard({
             color={Theme.colors.danger}
           />
 
-          <Text style={styles.endSessionText}>End Parking</Text>
+          <Text style={styles.endSessionText}>End Tracking</Text>
         </Pressable>
       )}
     </View>

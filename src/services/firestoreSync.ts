@@ -1,4 +1,11 @@
-import { collection, deleteDoc, doc, getDocs, setDoc } from "firebase/firestore";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  setDoc,
+  writeBatch,
+} from "firebase/firestore";
 
 import { db } from "@/src/firebase/firebaseConfig";
 import {
@@ -55,6 +62,19 @@ export async function deleteParkingSessionFromCloud(
   sessionId: string,
 ) {
   await deleteDoc(doc(db, "users", uid, "parkingSessions", sessionId));
+}
+
+export async function deleteParkingSessionsFromCloud(
+  uid: string,
+  sessionIds: string[],
+) {
+  if (sessionIds.length === 0) return;
+
+  const batch = writeBatch(db);
+  sessionIds.forEach((sessionId) => {
+    batch.delete(doc(db, "users", uid, "parkingSessions", sessionId));
+  });
+  await batch.commit();
 }
 export async function loadCloudBackup(uid: string): Promise<CloudBackup> {
   const [vehiclesSnap, documentsSnap, sessionsSnap] = await Promise.all([

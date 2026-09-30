@@ -47,18 +47,6 @@ export default function DashboardScreen() {
     return () => clearInterval(timer);
   }, []);
 
-
-  useEffect(() => {
-    const expiredActiveSessions = parkingSessions.filter(
-      (session) =>
-        session.status === "active" && session.expiryTimestamp <= now,
-    );
-
-    expiredActiveSessions.forEach((session) => {
-      endParkingSession(session.id);
-    });
-  }, [parkingSessions, now, endParkingSession]);
-
   const activeParkingSessions = useMemo(() => {
     return getActiveParkingSessions(parkingSessions, now);
   }, [parkingSessions, now]);

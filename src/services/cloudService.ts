@@ -12,6 +12,7 @@ import {
   deleteVehicleFromCloud,
   deleteDocumentFromCloud,
   deleteParkingSessionFromCloud,
+  deleteParkingSessionsFromCloud,
 } from "@/src/services/firestoreSync";
 
 import {
@@ -51,6 +52,10 @@ export const CloudService = {
 
   deleteParkingSession(uid: string, sessionId: string) {
     return deleteParkingSessionFromCloud(uid, sessionId);
+  },
+
+  deleteParkingSessions(uid: string, sessionIds: string[]) {
+    return deleteParkingSessionsFromCloud(uid, sessionIds);
   },
   
   uploadDocumentFile(
