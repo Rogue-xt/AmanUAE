@@ -121,7 +121,7 @@ export default function AuthScreen() {
           ]}
         >
           <Image
-            source={require("../assets/images/ZoneGard-Login.png")}
+            source={require("../assets/images/zonegard-icon.png")}
             style={styles.logo}
             resizeMode="contain"
           />

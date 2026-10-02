@@ -102,7 +102,7 @@ const complianceScore = useMemo(
         <View style={styles.brandRow}>
           <View style={styles.logoWrapper}>
             <Image
-              source={require("@/assets/images/ZoneGard-Logo.png")}
+              source={require("@/assets/images/zonegard-icon.png")}
               style={styles.logoImage}
               contentFit="cover"
             />
